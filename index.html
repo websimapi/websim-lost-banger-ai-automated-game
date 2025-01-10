@@ -6,11 +6,13 @@
     overflow: hidden;
     background: #111;
     font-family: monospace;
+    transition: all 0.8s ease;
   }
   
   #gameCanvas {
     width: 100vw;
     height: 100vh;
+    transition: all 1.2s cubic-bezier(0.4, 0, 0.2, 1);
   }
   
   #skip-btn {
@@ -24,10 +26,12 @@
     cursor: pointer;
     border-radius: 20px;
     transition: all 0.3s;
+    z-index: 100;
   }
   
   #skip-btn:hover {
     background: rgba(255,255,255,0.2);
+    transform: scale(1.1);
   }
   
   #state-indicator {
@@ -35,16 +39,41 @@
     top: 20px;
     left: 20px;
     color: white;
-    padding: 10px;
-    background: rgba(0,0,0,0.5);
+    padding: 15px;
+    background: rgba(0,0,0,0.7);
     border-radius: 10px;
+    z-index: 100;
+    border: 1px solid rgba(255,255,255,0.1);
+    box-shadow: 0 0 20px rgba(0,0,0,0.5);
+    transition: all 0.5s;
+  }
+
+  #action-log {
+    position: fixed;
+    bottom: 20px;
+    left: 20px;
+    color: white;
+    padding: 15px;
+    background: rgba(0,0,0,0.7);
+    border-radius: 10px;
+    max-width: 300px;
+    max-height: 150px;
+    overflow-y: auto;
+    font-size: 0.9em;
+    z-index: 100;
+    opacity: 0.8;
+    transition: opacity 0.3s;
+  }
+
+  #action-log:hover {
+    opacity: 1;
   }
 
   .npc {
     position: absolute;
     width: 40px;
     height: 40px;
-    transition: all 0.5s;
+    transition: all 1.5s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   #start-btn {
@@ -60,19 +89,40 @@
     border-radius: 30px;
     font-size: 1.2em;
     transition: all 0.3s;
+    z-index: 100;
   }
 
   #start-btn:hover {
     background: rgba(255,255,255,0.3);
+    transform: translate(-50%, -50%) scale(1.1);
   }
 
   .hidden {
     display: none !important;
   }
+
+  @keyframes pulse {
+    0% { r: 20; }
+    50% { r: 25; }
+    100% { r: 20; }
+  }
+
+  @keyframes glow {
+    0% { filter: drop-shadow(0 0 5px currentColor); }
+    50% { filter: drop-shadow(0 0 15px currentColor); }
+    100% { filter: drop-shadow(0 0 5px currentColor); }
+  }
+
+  .ambient-effect {
+    position: absolute;
+    pointer-events: none;
+    transition: all 0.8s;
+  }
 </style>
 </head>
 <body>
 <div id="state-indicator" class="hidden">Current State: Initializing...</div>
+<div id="action-log" class="hidden">Action Log:</div>
 <button id="skip-btn" class="hidden">⏭️ Skip Cooldown</button>
 <button id="start-btn">▶️ Start Experience</button>
 <svg id="gameCanvas"></svg>
@@ -92,6 +142,7 @@ class Game {
   constructor() {
     this.canvas = document.getElementById('gameCanvas');
     this.stateIndicator = document.getElementById('state-indicator');
+    this.actionLog = document.getElementById('action-log');
     this.skipBtn = document.getElementById('skip-btn');
     this.startBtn = document.getElementById('start-btn');
     this.audio = document.getElementById('bgMusic');
@@ -99,6 +150,7 @@ class Game {
     this.cooldown = false;
     this.npc = this.createNPC();
     this.started = false;
+    this.actionHistory = [];
     
     this.initialize();
   }
@@ -109,18 +161,38 @@ class Game {
     npcSvg.setAttribute("cy", "100");
     npcSvg.setAttribute("r", "20");
     npcSvg.setAttribute("fill", "white");
+    npcSvg.style.animation = "pulse 2s infinite, glow 3s infinite";
     this.canvas.appendChild(npcSvg);
     return npcSvg;
   }
 
+  logAction(action) {
+    this.actionHistory.unshift(`[${new Date().toLocaleTimeString()}] ${action}`);
+    if (this.actionHistory.length > 10) this.actionHistory.pop();
+    this.actionLog.innerHTML = this.actionHistory.join('<br>');
+  }
+
   initialize() {
-    // Setup event listeners
     this.skipBtn.addEventListener('click', () => this.skipCooldown());
     this.startBtn.addEventListener('click', () => this.startGame());
     
-    // Hide skip button initially
     this.skipBtn.classList.add('hidden');
     this.stateIndicator.classList.add('hidden');
+    this.actionLog.classList.add('hidden');
+    
+    // Add ambient background elements
+    this.addBackgroundElements();
+  }
+
+  addBackgroundElements() {
+    for (let i = 0; i < 20; i++) {
+      const star = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      star.setAttribute("cx", Math.random() * window.innerWidth);
+      star.setAttribute("cy", Math.random() * window.innerHeight);
+      star.setAttribute("r", Math.random() * 2 + 1);
+      star.setAttribute("fill", `rgba(255,255,255,${Math.random() * 0.5 + 0.5})`);
+      this.canvas.appendChild(star);
+    }
   }
 
   startGame() {
@@ -130,11 +202,9 @@ class Game {
     this.startBtn.classList.add('hidden');
     this.skipBtn.classList.remove('hidden');
     this.stateIndicator.classList.remove('hidden');
+    this.actionLog.classList.remove('hidden');
     
-    // Start background music
     this.audio.play().catch(e => console.log('Audio playback failed:', e));
-    
-    // Start the game loop
     this.startGameLoop();
   }
 
@@ -146,32 +216,44 @@ class Game {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          prompt: `Generate an action for the ${state} state in the Lost Banger game.
+          prompt: `Generate a creative action for the ${state} state in the Lost Banger game. Be imaginative and dramatic.
           
           <typescript-interface>
           interface Response {
             action: string;
+            description: string;
             parameters: {
               x?: number;
               y?: number;
               color?: string;
               scale?: number;
               effect?: string;
+              duration?: number;
+              intensity?: number;
+              pattern?: string;
             }
           }
           </typescript-interface>
           
           <example>
           {
-            "action": "move",
+            "action": "cosmicDance",
+            "description": "NPC performs an ethereal dance pattern while leaving trails of stardust",
             "parameters": {
-              "x": 200,
-              "y": 300,
-              "color": "#FF0000"
+              "x": 300,
+              "y": 400,
+              "color": "#FF00FF",
+              "pattern": "spiral",
+              "intensity": 0.8,
+              "duration": 5000
             }
           }
           </example>`,
-          data: state
+          data: {
+            currentState: state,
+            gameTime: Date.now(),
+            previousActions: this.actionHistory
+          }
         })
       });
       
@@ -186,49 +268,100 @@ class Game {
     const states = [GameState.NPC, GameState.GOD, GameState.AMBIENT];
     this.currentState = states[Math.floor(Math.random() * states.length)];
     this.stateIndicator.textContent = `Current State: ${this.currentState}`;
+    this.stateIndicator.style.background = 
+      this.currentState === GameState.NPC ? 'rgba(0,255,255,0.3)' :
+      this.currentState === GameState.GOD ? 'rgba(255,0,255,0.3)' :
+      'rgba(255,255,0,0.3)';
 
     const action = await this.getAIAction(this.currentState);
-    
-    switch(this.currentState) {
-      case GameState.NPC:
-        this.handleNPCAction(action);
-        break;
-      case GameState.GOD:
-        this.handleGodAction(action);
-        break;
-      case GameState.AMBIENT:
-        this.handleAmbientAction(action);
-        break;
+    if (action) {
+      this.logAction(`${this.currentState}: ${action.description}`);
+      
+      switch(this.currentState) {
+        case GameState.NPC:
+          this.handleNPCAction(action);
+          break;
+        case GameState.GOD:
+          this.handleGodAction(action);
+          break;
+        case GameState.AMBIENT:
+          this.handleAmbientAction(action);
+          break;
+      }
     }
   }
 
   handleNPCAction(action) {
     if (!action) return;
     
+    // Smooth transition to new position
+    this.npc.style.transition = `all ${(action.parameters.duration || 3000) / 1000}s cubic-bezier(0.4, 0, 0.2, 1)`;
+    
     this.npc.setAttribute("cx", action.parameters.x || 100);
     this.npc.setAttribute("cy", action.parameters.y || 100);
+    
     if (action.parameters.color) {
       this.npc.setAttribute("fill", action.parameters.color);
+    }
+
+    // Add trail effect
+    if (action.parameters.pattern === 'trail') {
+      const trail = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      trail.setAttribute("cx", this.npc.getAttribute("cx"));
+      trail.setAttribute("cy", this.npc.getAttribute("cy"));
+      trail.setAttribute("r", "5");
+      trail.setAttribute("fill", action.parameters.color || "white");
+      trail.style.opacity = "0.5";
+      this.canvas.appendChild(trail);
+      
+      setTimeout(() => trail.remove(), 2000);
     }
   }
 
   handleGodAction(action) {
     if (!action) return;
     
-    // Modify game elements based on God action
+    const duration = action.parameters.duration || 3000;
+    
     if (action.parameters.effect === 'invert') {
       document.body.style.filter = 'invert(1)';
-      setTimeout(() => document.body.style.filter = '', 2000);
+      setTimeout(() => document.body.style.filter = '', duration);
+    } else if (action.parameters.effect === 'psychedelic') {
+      document.body.style.animation = `hue-rotate ${duration}ms linear`;
+      setTimeout(() => document.body.style.animation = '', duration);
+    }
+    
+    if (action.parameters.intensity) {
+      const shake = Math.min(action.parameters.intensity * 20, 50);
+      this.canvas.style.transform = `translate(${shake}px, ${shake}px)`;
+      setTimeout(() => this.canvas.style.transform = '', duration);
     }
   }
 
   handleAmbientAction(action) {
     if (!action) return;
     
-    // Modify ambient elements
+    const duration = action.parameters.duration || 3000;
+    
     if (action.parameters.scale) {
       this.canvas.style.transform = `scale(${action.parameters.scale})`;
-      setTimeout(() => this.canvas.style.transform = '', 2000);
+      setTimeout(() => this.canvas.style.transform = '', duration);
+    }
+    
+    // Create floating particles
+    if (action.parameters.pattern === 'particles') {
+      for (let i = 0; i < 10; i++) {
+        const particle = document.createElement('div');
+        particle.className = 'ambient-effect';
+        particle.style.width = '10px';
+        particle.style.height = '10px';
+        particle.style.background = action.parameters.color || '#fff';
+        particle.style.left = Math.random() * window.innerWidth + 'px';
+        particle.style.top = Math.random() * window.innerHeight + 'px';
+        document.body.appendChild(particle);
+        
+        setTimeout(() => particle.remove(), duration);
+      }
     }
   }
 
@@ -254,7 +387,7 @@ class Game {
       setTimeout(() => {
         this.skipBtn.style.opacity = '1';
         this.skipBtn.disabled = false;
-      }, 180000); // 3 minutes
+      }, 180000);
     }
   }
 }
