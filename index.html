@@ -10,9 +10,27 @@
   }
   
   #gameCanvas {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw; 
+    height: 100vh;
+    transform-origin: center;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .game-container {
+    position: fixed;
     width: 100vw;
     height: 100vh;
-    transition: all 1.2s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow: hidden;
+  }
+
+  .world-boundary {
+    position: absolute;
+    pointer-events: none;
+    border: 2px solid rgba(255,255,255,0.1);
+    border-radius: 50%;
   }
   
   #skip-btn {
@@ -184,12 +202,6 @@
     100% { fill: #ff0000; }
   }
 
-  @keyframes spaceStorm {
-    0% { background: linear-gradient(45deg, #111 0%, #330066 50%, #111 100%); }
-    50% { background: linear-gradient(45deg, #330066 0%, #111 50%, #330066 100%); }
-    100% { background: linear-gradient(45deg, #111 0%, #330066 50%, #111 100%); }
-  }
-
   @keyframes starAudioPulse {
     0% { r: 1; opacity: 0.3; }
     50% { r: 3; opacity: 1; }
@@ -298,6 +310,9 @@ class Game {
     this.audioContext = null;
     this.audioAnalyser = null;
     this.collectibles = [];
+    this.worldSize = 10000; // Size of explorable space
+    this.viewportOffset = {x: 0, y: 0};
+    this.boundaryCircle = null;
     this.initialize();
     if (!localStorage.getItem('baseCollectibles')) {
       localStorage.setItem('baseCollectibles', JSON.stringify([{
@@ -318,12 +333,25 @@ class Game {
   createNPC() {
     if (!this.canvas) return null;
     const npcSvg = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-    npcSvg.setAttribute("cx", window.innerWidth / 2);
-    npcSvg.setAttribute("cy", window.innerHeight / 2);
+    // Center NPC
+    npcSvg.setAttribute("cx", this.worldSize/2);
+    npcSvg.setAttribute("cy", this.worldSize/2);
     npcSvg.setAttribute("r", "20");
     npcSvg.setAttribute("fill", "white");
     npcSvg.style.animation = "pulse 2s infinite, glow 3s infinite";
     this.canvas.appendChild(npcSvg);
+    
+    // Create boundary indicator
+    this.boundaryCircle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+    this.boundaryCircle.setAttribute("cx", this.worldSize/2);
+    this.boundaryCircle.setAttribute("cy", this.worldSize/2);
+    this.boundaryCircle.setAttribute("r", this.worldSize/2);
+    this.boundaryCircle.setAttribute("fill", "none");
+    this.boundaryCircle.setAttribute("stroke", "rgba(255,255,255,0.1)");
+    this.boundaryCircle.setAttribute("stroke-width", "2");
+    this.boundaryCircle.classList.add('world-boundary');
+    this.canvas.insertBefore(this.boundaryCircle, this.canvas.firstChild);
+
     return npcSvg;
   }
   logAction(action) {
@@ -348,21 +376,32 @@ class Game {
   addBackgroundElements() {
     const createStar = () => {
       const star = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-      star.setAttribute("cx", Math.random() * window.innerWidth);
-      star.setAttribute("cy", Math.random() * window.innerHeight);
+      star.setAttribute("cx", Math.random() * this.worldSize);
+      star.setAttribute("cy", Math.random() * this.worldSize);
       star.setAttribute("r", Math.random() * 2 + 1);
       star.setAttribute("fill", `rgba(255,255,255,${Math.random() * 0.5 + 0.5})`);
       star.classList.add('star');
       this.canvas.appendChild(star);
     };
-    for (let i = 0; i < 200; i++) {
+
+    // Create initial stars spread across world space
+    for (let i = 0; i < Math.floor(this.worldSize/50); i++) {
       createStar();
     }
+
+    // Continuously add stars in viewport area
     setInterval(() => {
-      if (this.canvas.childElementCount < 500) {
-        createStar();
+      if (this.canvas.childElementCount < this.worldSize/10) {
+        const star = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+        // Add stars near viewport
+        star.setAttribute("cx", -this.viewportOffset.x + Math.random() * window.innerWidth);
+        star.setAttribute("cy", -this.viewportOffset.y + Math.random() * window.innerHeight);
+        star.setAttribute("r", Math.random() * 2 + 1);
+        star.setAttribute("fill", `rgba(255,255,255,${Math.random() * 0.5 + 0.5})`);
+        star.classList.add('star');
+        this.canvas.appendChild(star);
       }
-    }, 200);
+    }, 100);
   }
   startGame() {
     if (this.started) return;
@@ -576,6 +615,7 @@ interface Response {
   }
   startGameLoop() {
     this.executeState();
+    
     setInterval(() => {
       if (!this.cooldown) {
         this.cooldown = true;
@@ -585,11 +625,26 @@ interface Response {
         }, 180000);
       }
     }, 1000);
-    setInterval(() => {
+
+    // Update viewport to follow NPC
+    const updateViewport = () => {
+      if (!this.npc) return;
+      
       const x = parseFloat(this.npc.getAttribute("cx"));
       const y = parseFloat(this.npc.getAttribute("cy"));
-      this.canvas.style.transform = `translate(${window.innerWidth / 2 - x}px, ${window.innerHeight / 2 - y}px)`;
-    }, 100);
+      
+      // Calculate viewport offset to center on NPC
+      this.viewportOffset = {
+        x: window.innerWidth/2 - x,
+        y: window.innerHeight/2 - y
+      };
+
+      this.canvas.style.transform = `translate(${this.viewportOffset.x}px, ${this.viewportOffset.y}px)`;
+      
+      requestAnimationFrame(updateViewport);
+    };
+
+    updateViewport();
   }
   startCountdown(seconds) {
     if (!this.timerValue) return;
@@ -629,69 +684,32 @@ interface Response {
     }, 1000);
   }
   autonomousMove() {
-    const movements = [{
-      fn: this.wander.bind(this),
-      weight: 1
-    }, {
-      fn: this.explore.bind(this),
-      weight: 2
-    }, {
-      fn: this.interactWithStructure.bind(this),
-      weight: 2
-    }, {
-      fn: this.seekCollectible.bind(this),
-      weight: 3
-    }, {
-      fn: this.orbitNearestStructure.bind(this),
-      weight: 2
-    }, {
-      fn: this.investigateBrightStar.bind(this),
-      weight: 2
-    }];
-    const totalWeight = movements.reduce((sum, m) => sum + m.weight, 0);
-    let random = Math.random() * totalWeight;
-    for (let movement of movements) {
-      random -= movement.weight;
-      if (random <= 0) {
-        movement.fn();
-        break;
-      }
-    }
-    this.lastAutonomousMove = Date.now();
-  }
-  wander() {
-    const angle = Math.random() * Math.PI * 2;
-    const distance = Math.random() * 100 + 50;
     const currentX = parseFloat(this.npc.getAttribute("cx"));
     const currentY = parseFloat(this.npc.getAttribute("cy"));
-    const newX = Math.max(50, Math.min(window.innerWidth - 50, currentX + Math.cos(angle) * distance));
-    const newY = Math.max(50, Math.min(window.innerHeight - 50, currentY + Math.sin(angle) * distance));
+
+    // Calculate distance from center
+    const dx = currentX - this.worldSize/2;
+    const dy = currentY - this.worldSize/2;
+    const distFromCenter = Math.sqrt(dx*dx + dy*dy);
+
+    // If near boundary, bias movement toward center
+    let angle, distance;
+    if (distFromCenter > this.worldSize/2 * 0.8) {
+      angle = Math.atan2(-dy, -dx) + (Math.random() - 0.5);
+      distance = Math.random() * 100 + 50;
+    } else {
+      angle = Math.random() * Math.PI * 2;
+      distance = Math.random() * 100 + 50;
+    }
+
+    const newX = Math.max(0, Math.min(this.worldSize, currentX + Math.cos(angle) * distance));
+    const newY = Math.max(0, Math.min(this.worldSize, currentY + Math.sin(angle) * distance));
+
+    this.npc.classList.add('npc-autonomous');
     this.npc.setAttribute("cx", newX);
     this.npc.setAttribute("cy", newY);
-  }
-  explore() {
-    const target = this.structures[Math.floor(Math.random() * this.structures.length)];
-    if (target) {
-      const rect = target.getBoundingClientRect();
-      this.npc.setAttribute("cx", rect.x + rect.width / 2);
-      this.npc.setAttribute("cy", rect.y + rect.height / 2);
-    } else {
-      this.wander();
-    }
-  }
-  interactWithStructure() {
-    const nearestStructure = this.findNearestStructure();
-    if (nearestStructure) {
-      const rect = nearestStructure.getBoundingClientRect();
-      const angle = Date.now() / 1000;
-      const radius = 50;
-      this.npc.setAttribute("cx", rect.x + rect.width / 2 + Math.cos(angle) * radius);
-      this.npc.setAttribute("cy", rect.y + rect.height / 2 + Math.sin(angle) * radius);
-    }
-  }
-  findNearestStructure() {
-    if (!this.structures.length) return null;
-    return this.structures[0];
+    
+    this.lastAutonomousMove = Date.now();
   }
   initAudio() {
     this.audioContext = new AudioContext();
@@ -754,6 +772,10 @@ interface Response {
       this.npc.setAttribute("cx", centerX + Math.cos(time) * radius);
       this.npc.setAttribute("cy", centerY + Math.sin(time) * radius);
     }
+  }
+  findNearestStructure() {
+    if (!this.structures.length) return null;
+    return this.structures[0];
   }
   investigateBrightStar() {
     const rainbowStars = document.querySelectorAll('.star-rainbow');
