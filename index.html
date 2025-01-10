@@ -10,10 +10,10 @@
   }
   
   #gameCanvas {
-    position: relative;
     width: 100vw;
     height: 100vh;
-    transition: transform 0.2s linear;
+    transition: all 1.2s cubic-bezier(0.4, 0, 0.2, 1);
+    background: transparent;
   }
   
   #skip-btn {
@@ -313,272 +313,269 @@
 </style>
 </head>
 <body>
-<svg id="gameCanvas"/>
-<div id="state-indicator">Current State: Initializing...</div>
-<div id="action-log">Action Log:</div>
-<button id="skip-btn">&#x23ed;&#xfe0f; Skip Cooldown <span id="timer-value">3:00</span></button>
-<button id="start-btn">&#x25b6;&#xfe0f; Start Experience</button>
-<div id="countdown-timer"></div>
-<div id="npc-inventory" class="npc-inventory">
-  <h3>Inventory</h3>
-  <div id="inventory-items"></div>
-</div>
+  <svg id="gameCanvas" viewBox="-5000 -5000 10000 10000"></svg>
+  <div id="state-indicator">Current State: Initializing...</div>
+  <div id="action-log">Action Log:</div>
+  <button id="skip-btn">&#x23ed;&#xfe0f; Skip Cooldown <span id="timer-value">3:00</span></button>
+  <button id="start-btn">&#x25b6;&#xfe0f; Start Experience</button>
+  <div id="countdown-timer"></div>
+  <div id="npc-inventory" class="npc-inventory">
+    <h3>Inventory</h3>
+    <div id="inventory-items"></div>
+  </div>
 
-<div id="npc-crafting" class="npc-crafting">
-  <h3>Crafting</h3>
-  <div class="crafting-grid" id="crafting-grid"></div>  
-  <button id="craft-btn">Craft</button>
-</div>
-<audio id="bgMusic" loop>
-  <source src="/lostbanger.wav" type="audio/wav">
-</audio>
+  <div id="npc-crafting" class="npc-crafting">
+    <h3>Crafting</h3>
+    <div class="crafting-grid" id="crafting-grid"></div>  
+    <button id="craft-btn">Craft</button>
+  </div>
+  <audio id="bgMusic" loop>
+    <source src="/lostbanger.wav" type="audio/wav">
+  </audio>
 
-<script type="module">const GameState = {
-  NPC: 'NPC',
-  GOD: 'GOD',
-  AMBIENT: 'AMBIENT'
-};
-class Chunk {
-  constructor(x, y) {
-    this.x = x; 
-    this.y = y;
-    this.element = document.createElementNS("http://www.w3.org/2000/svg", "g");
-    this.element.classList.add('chunk');
-    // Transform based on chunk coordinates
-    this.element.setAttribute('transform', `translate(${x * 1000}, ${y * 1000})`);
-    this.generated = false;
-  }
-  generate() {
-    if (this.generated) return;
-    const starCount = Math.floor(Math.random() * 50) + 50;
-    for (let i = 0; i < starCount; i++) {
-      const star = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-      star.setAttribute("cx", Math.random() * 1000);
-      star.setAttribute("cy", Math.random() * 1000);
-      star.setAttribute("r", Math.random() * 2 + 1);
-      star.setAttribute("fill", `rgba(255,255,255,${Math.random() * 0.5 + 0.5})`);
-      star.classList.add('star');
-      this.element.appendChild(star);
-    }
-    if (Math.random() < 0.1) {
-      const structure = document.createElementNS("http://www.w3.org/2000/svg", "g");
-      structure.classList.add('god-structure');
-      const patterns = ['observatory', 'portal', 'crystal', 'nebula'];
-      const pattern = patterns[Math.floor(Math.random() * patterns.length)];
-      switch (pattern) {
-        case 'observatory':
-          structure.innerHTML = `<path d="M-50,-50 L50,50 M-50,50 L50,-50" stroke="#fff"/>`;
-          break;
-        case 'portal':
-          structure.innerHTML = `<circle r="30" fill="none" stroke="#fff"/>`;
-          break;
+  <script type="module">
+    const GameState = {
+      NPC: 'NPC',
+      GOD: 'GOD',
+      AMBIENT: 'AMBIENT'
+    };
+
+    class Chunk {
+      constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.element = document.createElementNS("http://www.w3.org/2000/svg", "g");
+        this.element.classList.add('chunk');
+        this.element.setAttribute('transform', `translate(${x * 1000}, ${y * 1000})`);
+        this.generated = false;
       }
-      structure.setAttribute('transform', `translate(${Math.random() * 1000},${Math.random() * 1000})`);
-      this.element.appendChild(structure);
+      generate() {
+        if (this.generated) return;
+        const starCount = Math.floor(Math.random() * 50) + 50;
+        for (let i = 0; i < starCount; i++) {
+          const star = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+          star.setAttribute("cx", Math.random() * 1000);
+          star.setAttribute("cy", Math.random() * 1000);
+          star.setAttribute("r", Math.random() * 2 + 1);
+          star.setAttribute("fill", `rgba(255,255,255,${Math.random() * 0.5 + 0.5})`);
+          star.classList.add('star');
+          this.element.appendChild(star);
+        }
+        if (Math.random() < 0.1) {
+          const structure = document.createElementNS("http://www.w3.org/2000/svg", "g");
+          structure.classList.add('god-structure');
+          const patterns = ['observatory', 'portal', 'crystal', 'nebula'];
+          const pattern = patterns[Math.floor(Math.random() * patterns.length)];
+          switch (pattern) {
+            case 'observatory':
+              structure.innerHTML = `<path d="M-50,-50 L50,50 M-50,50 L50,-50" stroke="#fff"/>`;
+              break;
+            case 'portal':
+              structure.innerHTML = `<circle r="30" fill="none" stroke="#fff"/>`;
+              break;
+          }
+          structure.setAttribute('transform', `translate(${Math.random() * 1000},${Math.random() * 1000})`);
+          this.element.appendChild(structure);
+        }
+        this.generated = true;
+      }
     }
-    this.generated = true;
-  }
-}
-class Game {
-  constructor() {
-    if (!document.getElementById('gameCanvas')) {
-      const canvas = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-      canvas.id = 'gameCanvas';
-      document.body.appendChild(canvas);
-    }
-    if (!document.getElementById('state-indicator')) {
-      const indicator = document.createElement('div');
-      indicator.id = 'state-indicator';
-      indicator.innerHTML = 'Current State: Initializing...';
-      document.body.appendChild(indicator);
-    }
-    if (!document.getElementById('action-log')) {
-      const log = document.createElement('div');
-      log.id = 'action-log';
-      log.innerHTML = 'Action Log:';
-      document.body.appendChild(log);
-    }
-    if (!document.getElementById('skip-btn')) {
-      const skipBtn = document.createElement('button');
-      skipBtn.id = 'skip-btn';
-      skipBtn.innerHTML = '&#x23ed;&#xfe0f; Skip Cooldown <span id="timer-value">3:00</span>';
-      document.body.appendChild(skipBtn);
-    }
-    if (!document.getElementById('start-btn')) {
-      const startBtn = document.createElement('button');
-      startBtn.id = 'start-btn';
-      startBtn.innerHTML = '&#x25b6;&#xfe0f; Start Experience';
-      document.body.appendChild(startBtn);
-    }
-    if (!document.getElementById('bgMusic')) {
-      const audio = document.createElement('audio');
-      audio.id = 'bgMusic';
-      audio.loop = true;
-      const source = document.createElement('source');
-      source.src = '/lostbanger.wav';
-      source.type = 'audio/wav';
-      audio.appendChild(source);
-      document.body.appendChild(audio);
-    }
-    if (!document.getElementById('countdown-timer')) {
-      const timer = document.createElement('div');
-      timer.id = 'countdown-timer';
-      document.body.appendChild(timer);
-    }
-    this.canvas = document.getElementById('gameCanvas');
-    this.stateIndicator = document.getElementById('state-indicator');
-    this.actionLog = document.getElementById('action-log');
-    this.skipBtn = document.getElementById('skip-btn');
-    this.startBtn = document.getElementById('start-btn');
-    this.audio = document.getElementById('bgMusic');
-    this.countdownTimer = document.getElementById('countdown-timer');
-    this.timerValue = document.getElementById('timer-value');
-    this.countdownInterval = null;
-    this.currentState = null;
-    this.cooldown = false;
-    this.npc = this.createNPC();
-    this.started = false;
-    this.actionHistory = [];
-    this.autonomousInterval = null;
-    this.chunkSize = 1000; // Size of each chunk
-    this.viewDistance = 2; // How many chunks to load in each direction
-    this.loadedChunks = new Map(); // Track loaded chunks
-    this.lastChunkUpdate = 0;
-    this.lastAutonomousMove = Date.now();
-    this.audioContext = null;
-    this.audioAnalyser = null;
-    this.collectibles = [];
-    this.inventory = new NPCInventory();
-    this.crafting = new NPCCrafting(this.inventory);
-    this.structures = [];
-    if (!localStorage.getItem('baseCollectibles')) {
-      localStorage.setItem('baseCollectibles', JSON.stringify([{
-        type: 'stardust',
-        color: '#00ffff',
-        value: 10
-      }, {
-        type: 'cosmicShard',
-        color: '#ff00ff',
-        value: 20
-      }, {
-        type: 'voidEssence',
-        color: '#ffff00',
-        value: 30
-      }]));
-    }
-    this.initialize();
-    if (this.skipBtn) {
-      this.skipBtn.addEventListener('click', () => this.skipCooldown());
-    }
-    if (this.startBtn) {
-      this.startBtn.addEventListener('click', () => this.startGame());
-    }
-    if (this.skipBtn) this.skipBtn.classList.add('hidden');
-    if (this.stateIndicator) this.stateIndicator.classList.add('hidden');
-    if (this.actionLog) this.actionLog.classList.add('hidden');
-    if (this.countdownTimer) this.countdownTimer.classList.add('hidden');
-    this.startAutonomousBehavior();
-  }
-  createNPC() {
-    if (!this.canvas) return null;
-    const npcSvg = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-    npcSvg.setAttribute("cx", window.innerWidth / 2);
-    npcSvg.setAttribute("cy", window.innerHeight / 2);
-    npcSvg.setAttribute("r", "20");
-    npcSvg.setAttribute("fill", "white");
-    npcSvg.style.animation = "pulse 2s infinite, glow 3s infinite";
-    this.canvas.appendChild(npcSvg);
-    return npcSvg;
-  }
-  logAction(action) {
-    if (!this.actionLog) return;
-    this.actionHistory.unshift(`[${new Date().toLocaleTimeString()}] ${action}`);
-    if (this.actionHistory.length > 10) this.actionHistory.pop();
-    this.actionLog.innerHTML = this.actionHistory.join('<br>');
-  }
-  initialize() {
-    this.updateVisibleChunks();
-  }
-  updateVisibleChunks() {
-    const npcX = parseFloat(this.npc.getAttribute("cx"));
-    const npcY = parseFloat(this.npc.getAttribute("cy"));
-    
-    // Calculate current chunk coordinates
-    const currentChunkX = Math.floor(npcX / this.chunkSize);
-    const currentChunkY = Math.floor(npcY / this.chunkSize);
 
-    // Load new chunks in view distance
-    for (let dx = -this.viewDistance; dx <= this.viewDistance; dx++) {
-      for (let dy = -this.viewDistance; dy <= this.viewDistance; dy++) {
-        const chunkX = currentChunkX + dx;
-        const chunkY = currentChunkY + dy;
-        const key = `${chunkX},${chunkY}`;
-        
-        if (!this.loadedChunks.has(key)) {
-          const chunk = new Chunk(chunkX, chunkY);
-          this.loadedChunks.set(key, chunk);
-          this.canvas.appendChild(chunk.element);
-          chunk.generate();
+    class Game {
+      constructor() {
+        if (!document.getElementById('gameCanvas')) {
+          const canvas = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+          canvas.id = 'gameCanvas';
+          canvas.setAttribute('viewBox', '-5000 -5000 10000 10000');
+          document.body.appendChild(canvas);
+        }
+        if (!document.getElementById('state-indicator')) {
+          const indicator = document.createElement('div');
+          indicator.id = 'state-indicator';
+          indicator.innerHTML = 'Current State: Initializing...';
+          document.body.appendChild(indicator);
+        }
+        if (!document.getElementById('action-log')) {
+          const log = document.createElement('div');
+          log.id = 'action-log';
+          log.innerHTML = 'Action Log:';
+          document.body.appendChild(log);
+        }
+        if (!document.getElementById('skip-btn')) {
+          const skipBtn = document.createElement('button');
+          skipBtn.id = 'skip-btn';
+          skipBtn.innerHTML = '&#x23ed;&#xfe0f; Skip Cooldown <span id="timer-value">3:00</span>';
+          document.body.appendChild(skipBtn);
+        }
+        if (!document.getElementById('start-btn')) {
+          const startBtn = document.createElement('button');
+          startBtn.id = 'start-btn';
+          startBtn.innerHTML = '&#x25b6;&#xfe0f; Start Experience';
+          document.body.appendChild(startBtn);
+        }
+        if (!document.getElementById('bgMusic')) {
+          const audio = document.createElement('audio');
+          audio.id = 'bgMusic';
+          audio.loop = true;
+          const source = document.createElement('source');
+          source.src = '/lostbanger.wav';
+          source.type = 'audio/wav';
+          audio.appendChild(source);
+          document.body.appendChild(audio);
+        }
+        if (!document.getElementById('countdown-timer')) {
+          const timer = document.createElement('div');
+          timer.id = 'countdown-timer';
+          document.body.appendChild(timer);
+        }
+        this.canvas = document.getElementById('gameCanvas');
+        this.stateIndicator = document.getElementById('state-indicator');
+        this.actionLog = document.getElementById('action-log');
+        this.skipBtn = document.getElementById('skip-btn');
+        this.startBtn = document.getElementById('start-btn');
+        this.audio = document.getElementById('bgMusic');
+        this.countdownTimer = document.getElementById('countdown-timer');
+        this.timerValue = document.getElementById('timer-value');
+        this.countdownInterval = null;
+        this.currentState = null;
+        this.cooldown = false;
+        this.npc = this.createNPC();
+        this.started = false;
+        this.actionHistory = [];
+        this.autonomousInterval = null;
+        this.chunks = new Map();
+        this.chunkSize = 1000;
+        this.loadedChunks = new Set();
+        this.lastChunkUpdate = 0;
+        this.lastAutonomousMove = Date.now();
+        this.audioContext = null;
+        this.audioAnalyser = null;
+        this.collectibles = [];
+        this.inventory = new NPCInventory();
+        this.crafting = new NPCCrafting(this.inventory);
+        this.structures = [];
+        if (!localStorage.getItem('baseCollectibles')) {
+          localStorage.setItem('baseCollectibles', JSON.stringify([{
+            type: 'stardust',
+            color: '#00ffff',
+            value: 10
+          }, {
+            type: 'cosmicShard',
+            color: '#ff00ff',
+            value: 20
+          }, {
+            type: 'voidEssence',
+            color: '#ffff00',
+            value: 30
+          }]));
+        }
+        this.initialize();
+        if (this.skipBtn) {
+          this.skipBtn.addEventListener('click', () => this.skipCooldown());
+        }
+        if (this.startBtn) {
+          this.startBtn.addEventListener('click', () => this.startGame());
+        }
+        if (this.skipBtn) this.skipBtn.classList.add('hidden');
+        if (this.stateIndicator) this.stateIndicator.classList.add('hidden');
+        if (this.actionLog) this.actionLog.classList.add('hidden');
+        if (this.countdownTimer) this.countdownTimer.classList.add('hidden');
+        this.startAutonomousBehavior();
+      }
+
+      createNPC() {
+        const npcSvg = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+        npcSvg.setAttribute("cx", 0);
+        npcSvg.setAttribute("cy", 0);
+        npcSvg.setAttribute("r", "20");
+        npcSvg.setAttribute("fill", "white");
+        npcSvg.style.animation = "pulse 2s infinite, glow 3s infinite, float 4s infinite";
+        this.canvas.appendChild(npcSvg);
+        return npcSvg;
+      }
+
+      logAction(action) {
+        if (!this.actionLog) return;
+        this.actionHistory.unshift(`[${new Date().toLocaleTimeString()}] ${action}`);
+        if (this.actionHistory.length > 10) this.actionHistory.pop();
+        this.actionLog.innerHTML = this.actionHistory.join('<br>');
+      }
+
+      initialize() {
+        this.updateVisibleChunks();
+      }
+
+      updateVisibleChunks() {
+        const npcX = parseFloat(this.npc.getAttribute("cx"));
+        const npcY = parseFloat(this.npc.getAttribute("cy"));
+        const currentChunkX = Math.floor(npcX / this.chunkSize);
+        const currentChunkY = Math.floor(npcY / this.chunkSize);
+        for (let dx = -2; dx <= 2; dx++) {
+          for (let dy = -2; dy <= 2; dy++) {
+            const chunkX = currentChunkX + dx;
+            const chunkY = currentChunkY + dy;
+            const key = `${chunkX},${chunkY}`;
+            if (!this.chunks.has(key)) {
+              const chunk = new Chunk(chunkX, chunkY);
+              this.chunks.set(key, chunk);
+              this.canvas.appendChild(chunk.element);
+              chunk.generate();
+            }
+          }
+        }
+        for (const [key, chunk] of this.chunks) {
+          const [x, y] = key.split(',').map(Number);
+          if (Math.abs(x - currentChunkX) > 3 || Math.abs(y - currentChunkY) > 3) {
+            chunk.element.remove();
+            this.chunks.delete(key);
+          }
         }
       }
-    }
 
-    // Remove chunks outside view distance
-    for (const [key, chunk] of this.loadedChunks.entries()) {
-      const [x, y] = key.split(',').map(Number);
-      const distance = Math.max(
-        Math.abs(x - currentChunkX),
-        Math.abs(y - currentChunkY)
-      );
-      
-      if (distance > this.viewDistance + 1) {
-        chunk.element.remove();
-        this.loadedChunks.delete(key);
+      addBackgroundElements() {
+        const createStar = () => {
+          const star = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+          star.setAttribute("cx", Math.random() * window.innerWidth);
+          star.setAttribute("cy", Math.random() * window.innerHeight);
+          star.setAttribute("r", Math.random() * 2 + 1);
+          star.setAttribute("fill", `rgba(255,255,255,${Math.random() * 0.5 + 0.5})`);
+          star.classList.add('star');
+          this.canvas.appendChild(star);
+        };
+        for (let i = 0; i < 200; i++) {
+          createStar();
+        }
+        setInterval(() => {
+          if (this.canvas.childElementCount < 500) {
+            createStar();
+          }
+        }, 200);
       }
-    }
-  }
-  addBackgroundElements() {
-    const createStar = () => {
-      const star = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-      star.setAttribute("cx", Math.random() * window.innerWidth);
-      star.setAttribute("cy", Math.random() * window.innerHeight);
-      star.setAttribute("r", Math.random() * 2 + 1);
-      star.setAttribute("fill", `rgba(255,255,255,${Math.random() * 0.5 + 0.5})`);
-      star.classList.add('star');
-      this.canvas.appendChild(star);
-    };
-    for (let i = 0; i < 200; i++) {
-      createStar();
-    }
-    setInterval(() => {
-      if (this.canvas.childElementCount < 500) {
-        createStar();
+
+      startGame() {
+        if (this.started) return;
+        this.started = true;
+        this.startBtn?.classList.add('hidden');
+        this.skipBtn?.classList.remove('hidden');
+        this.stateIndicator?.classList.remove('hidden');
+        this.actionLog?.classList.remove('hidden');
+        this.countdownTimer?.classList.remove('hidden');
+        this.audio?.play().catch(e => console.log('Audio playback failed:', e));
+        this.initAudio();
+        this.startGameLoop();
+        this.startCountdown(180);
+        this.startAutonomousBehavior();
       }
-    }, 200);
-  }
-  startGame() {
-    if (this.started) return;
-    this.started = true;
-    this.startBtn?.classList.add('hidden');
-    this.skipBtn?.classList.remove('hidden');
-    this.stateIndicator?.classList.remove('hidden');
-    this.actionLog?.classList.remove('hidden');
-    this.countdownTimer?.classList.remove('hidden');
-    this.audio?.play().catch(e => console.log('Audio playback failed:', e));
-    this.initAudio();
-    this.startGameLoop();
-    this.startCountdown(180);
-    this.startAutonomousBehavior();
-  }
-  async getAIAction(state) {
-    try {
-      const response = await fetch('/api/ai_completion', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          prompt: `Generate a creative action for the ${state} state in the Lost Banger game.
+
+      async getAIAction(state) {
+        try {
+          const response = await fetch('/api/ai_completion', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              prompt: `Generate a creative action for the ${state} state in the Lost Banger game.
 For NPC: Focus on movement patterns, interactions with structures, and emotional states.
 For God: Create grand cosmic structures and environmental effects that persist and can be interacted with.
 For Ambient: Generate atmospheric changes that enhance the space theme.
@@ -609,532 +606,577 @@ interface Response {
 }
 </typescript-interface>
 `,
-          data: {
-            currentState: state,
-            gameTime: Date.now(),
-            previousActions: this.actionHistory
-          }
-        })
-      });
-      return await response.json();
-    } catch (error) {
-      console.error('AI Action Error:', error);
-      return null;
-    }
-  }
-  async executeState() {
-    this.lastAutonomousMove = Date.now() + 10000;
-    const states = [GameState.NPC, GameState.GOD, GameState.AMBIENT];
-    this.currentState = states[Math.floor(Math.random() * states.length)];
-    if (this.stateIndicator) {
-      this.stateIndicator.textContent = `Current State: ${this.currentState}`;
-      this.stateIndicator.style.background = this.currentState === GameState.NPC ? 'rgba(0,255,255,0.3)' : this.currentState === GameState.GOD ? 'rgba(255,0,255,0.3)' : 'rgba(255,255,0,0.3)';
-    }
-    try {
-      const action = await this.getAIAction(this.currentState);
-      if (action) {
-        this.logAction(`${this.currentState}: ${action.description}`);
-        switch (this.currentState) {
-          case GameState.NPC:
-            this.handleNPCAction(action);
-            break;
-          case GameState.GOD:
-            this.handleGodAction(action);
-            break;
-          case GameState.AMBIENT:
-            this.handleAmbientAction(action);
-            break;
+              data: {
+                currentState: state,
+                gameTime: Date.now(),
+                previousActions: this.actionHistory
+              }
+            })
+          });
+          return await response.json();
+        } catch (error) {
+          console.error('AI Action Error:', error);
+          return null;
         }
       }
-    } catch (error) {
-      console.error('Error executing state:', error);
-    }
-  }
-  handleNPCAction(action) {
-    if (!action) return;
-    this.npc.style.transition = `all ${(action.parameters.duration || 4000) / 1000}s cubic-bezier(0.4, 0, 0.2, 1)`;
-    this.npc.setAttribute("cx", action.parameters.x || 100);
-    this.npc.setAttribute("cy", action.parameters.y || 100);
-    if (action.parameters.color) {
-      this.npc.setAttribute("fill", action.parameters.color);
-    }
-    if (action.parameters.pattern === 'trail') {
-      for (let i = 0; i < 5; i++) {
-        setTimeout(() => {
-          const trail = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-          trail.setAttribute("cx", this.npc.getAttribute("cx"));
-          trail.setAttribute("cy", this.npc.getAttribute("cy"));
-          trail.setAttribute("r", "5");
-          trail.setAttribute("fill", action.parameters.color || "white");
-          trail.style.opacity = "0.5";
-          trail.style.animation = "glow 2s infinite";
-          this.canvas.appendChild(trail);
-          setTimeout(() => trail.remove(), 2000);
-        }, i * 200);
+
+      async executeState() {
+        this.lastAutonomousMove = Date.now() + 10000;
+        const states = [GameState.NPC, GameState.GOD, GameState.AMBIENT];
+        this.currentState = states[Math.floor(Math.random() * states.length)];
+        if (this.stateIndicator) {
+          this.stateIndicator.textContent = `Current State: ${this.currentState}`;
+          this.stateIndicator.style.background = this.currentState === GameState.NPC ? 'rgba(0,255,255,0.3)' : this.currentState === GameState.GOD ? 'rgba(255,0,255,0.3)' : 'rgba(255,255,0,0.3)';
+        }
+        try {
+          const action = await this.getAIAction(this.currentState);
+          if (action) {
+            this.logAction(`${this.currentState}: ${action.description}`);
+            switch (this.currentState) {
+              case GameState.NPC:
+                this.handleNPCAction(action);
+                break;
+              case GameState.GOD:
+                this.handleGodAction(action);
+                break;
+              case GameState.AMBIENT:
+                this.handleAmbientAction(action);
+                break;
+            }
+          }
+        } catch (error) {
+          console.error('Error executing state:', error);
+        }
       }
-    }
-  }
-  handleGodAction(action) {
-    if (!action) return;
-    const duration = action.parameters.duration || 3000;
-    let godIdeas = JSON.parse(localStorage.getItem('godIdeas') || '[]');
-    godIdeas.push({
-      timestamp: Date.now(),
-      action: action,
-      implemented: false
-    });
-    localStorage.setItem('godIdeas', JSON.stringify(godIdeas));
-    const structure = document.createElementNS("http://www.w3.org/2000/svg", "g");
-    structure.classList.add('god-structure');
-    const patterns = ['observatory', 'portal', 'crystal', 'nebula'];
-    const pattern = patterns[Math.floor(Math.random() * patterns.length)];
-    switch (pattern) {
-      case 'observatory':
-        structure.innerHTML = `<path d="M-50,-50 L50,50 M-50,50 L50,-50" stroke="${action.parameters.color || '#fff'}"/>`;
-        break;
-      case 'portal':
-        structure.innerHTML = `<circle r="30" fill="none" stroke="${action.parameters.color || '#fff'}"/>`;
-        break;
-    }
-    structure.setAttribute('transform', `translate(${action.parameters.x || window.innerWidth / 2},${action.parameters.y || window.innerHeight / 2})`);
-    this.canvas.appendChild(structure);
-    this.structures.push(structure);
-    if (action.parameters.effect === 'invert') {
-      document.body.style.filter = 'invert(1)';
-      setTimeout(() => document.body.style.filter = '', duration);
-    } else if (action.parameters.effect === 'psychedelic') {
-      document.body.style.animation = `hue-rotate ${duration}ms linear`;
-      setTimeout(() => document.body.style.animation = '', duration);
-    }
-    if (action.parameters.intensity) {
-      const shake = Math.min(action.parameters.intensity * 20, 50);
-      this.canvas.style.transform = `translate(${shake}px, ${shake}px)`;
-      setTimeout(() => this.canvas.style.transform = '', duration);
-    }
-    document.body.classList.add('god-active');
-    setTimeout(() => document.body.classList.remove('god-active'), duration);
-    const implementPastIdea = () => {
-      const unimplementedIdeas = godIdeas.filter(idea => !idea.implemented);
-      if (unimplementedIdeas.length > 0) {
-        const idea = unimplementedIdeas[Math.floor(Math.random() * unimplementedIdeas.length)];
-        const element = document.createElementNS("http://www.w3.org/2000/svg", "g");
-        const patterns = ['spiral', 'orbit', 'pulse', 'wave'];
+
+      handleNPCAction(action) {
+        if (!action) return;
+        this.npc.style.transition = `all ${(action.parameters.duration || 4000) / 1000}s cubic-bezier(0.4, 0, 0.2, 1)`;
+        this.npc.setAttribute("cx", action.parameters.x || this.npc.getAttribute("cx"));
+        this.npc.setAttribute("cy", action.parameters.y || this.npc.getAttribute("cy"));
+        if (action.parameters.color) {
+          this.npc.setAttribute("fill", action.parameters.color);
+        }
+        if (action.parameters.pattern === 'trail') {
+          for (let i = 0; i < 5; i++) {
+            setTimeout(() => {
+              const trail = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+              trail.setAttribute("cx", this.npc.getAttribute("cx"));
+              trail.setAttribute("cy", this.npc.getAttribute("cy"));
+              trail.setAttribute("r", "5");
+              trail.setAttribute("fill", action.parameters.color || "white");
+              trail.style.opacity = "0.5";
+              trail.style.animation = "glow 2s infinite";
+              this.canvas.appendChild(trail);
+              setTimeout(() => trail.remove(), 2000);
+            }, i * 200);
+          }
+        }
+      }
+
+      handleGodAction(action) {
+        if (!action) return;
+        const duration = action.parameters.duration || 3000;
+        let godIdeas = JSON.parse(localStorage.getItem('godIdeas') || '[]');
+        godIdeas.push({
+          timestamp: Date.now(),
+          action: action,
+          implemented: false
+        });
+        localStorage.setItem('godIdeas', JSON.stringify(godIdeas));
+        const structure = document.createElementNS("http://www.w3.org/2000/svg", "g");
+        structure.classList.add('god-structure');
+        const patterns = ['observatory', 'portal', 'crystal', 'nebula'];
         const pattern = patterns[Math.floor(Math.random() * patterns.length)];
         switch (pattern) {
-          case 'spiral':
-            for (let i = 0; i < 10; i++) {
-              const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-              circle.setAttribute("r", 5);
-              circle.setAttribute("fill", idea.action.parameters.color || "#fff");
-              circle.style.animation = `spiral${i} ${duration}ms infinite`;
-              element.appendChild(circle);
-            }
+          case 'observatory':
+            structure.innerHTML = `<path d="M-50,-50 L50,50 M-50,50 L50,-50" stroke="${action.parameters.color || '#fff'}"/>`;
+            break;
+          case 'portal':
+            structure.innerHTML = `<circle r="30" fill="none" stroke="${action.parameters.color || '#fff'}"/>`;
             break;
         }
-        this.canvas.appendChild(element);
-        idea.implemented = true;
-        localStorage.setItem('godIdeas', JSON.stringify(godIdeas));
-      }
-    };
-    implementPastIdea();
-    if (Math.random() < 0.3) {
-      this.spawnCollectible(action.parameters.x || window.innerWidth / 2, action.parameters.y || window.innerHeight / 2);
-    }
-    if (Math.random() < 0.3) {
-      const newRecipe = {
-        inputs: [this.inventory.items[0]?.type || 'stardust', this.inventory.items[1]?.type || 'cosmicShard'],
-        output: {
-          type: action.parameters.structure?.type + 'Essence' || 'celestialEssence',
-          color: action.parameters.color || '#ffffff',
-          value: Math.floor(Math.random() * 50 + 25)
+        structure.setAttribute('transform', `translate(${action.parameters.x || 0},${action.parameters.y || 0})`);
+        this.canvas.appendChild(structure);
+        this.structures.push(structure);
+        if (action.parameters.effect === 'invert') {
+          document.body.style.filter = 'invert(1)';
+          setTimeout(() => document.body.style.filter = '', duration);
+        } else if (action.parameters.effect === 'psychedelic') {
+          document.body.style.animation = `hue-rotate ${duration}ms linear`;
+          setTimeout(() => document.body.style.animation = '', duration);
         }
-      };
-      this.crafting.recipes.push(newRecipe);
-    }
-  }
-  handleAmbientAction(action) {
-    if (!action || !action.parameters) return;
-    const duration = action.parameters.duration || 3000;
-    const effects = ['spaceStorm', 'nebulaMist', 'solarWind', 'cosmicRain'];
-    const effect = effects[Math.floor(Math.random() * effects.length)];
-    document.body.style.animation = `${effect} ${duration}ms ease-in-out`;
-    if (action.parameters.pattern === 'particles') {
-      for (let i = 0; i < 30; i++) {
-        const particle = document.createElement('div');
-        particle.className = 'ambient-effect';
-        particle.style.width = '10px';
-        particle.style.height = '10px';
-        particle.style.background = action.parameters.color || '#fff';
-        particle.style.left = Math.random() * window.innerWidth + 'px';
-        particle.style.top = Math.random() * window.innerHeight + 'px';
-        particle.style.filter = `blur(${Math.random() * 5}px)`;
-        document.body.appendChild(particle);
-        const angle = Math.random() * Math.PI * 2;
-        const speed = Math.random() * 100 + 50;
-        particle.style.transform = `translate(
-          ${Math.cos(angle) * speed}px,
-          ${Math.sin(angle) * speed}px
-        )`;
-        setTimeout(() => particle.remove(), duration);
+        if (action.parameters.intensity) {
+          const shake = Math.min(action.parameters.intensity * 20, 50);
+          this.canvas.style.transform = `translate(${shake}px, ${shake}px)`;
+          setTimeout(() => this.canvas.style.transform = `translate(${window.innerWidth / 2}px, ${window.innerHeight / 2}px)`, duration);
+        }
+        document.body.classList.add('god-active');
+        setTimeout(() => document.body.classList.remove('god-active'), duration);
+        const implementPastIdea = () => {
+          const unimplementedIdeas = godIdeas.filter(idea => !idea.implemented);
+          if (unimplementedIdeas.length > 0) {
+            const idea = unimplementedIdeas[Math.floor(Math.random() * unimplementedIdeas.length)];
+            const element = document.createElementNS("http://www.w3.org/2000/svg", "g");
+            const patterns = ['spiral', 'orbit', 'pulse', 'wave'];
+            const pattern = patterns[Math.floor(Math.random() * patterns.length)];
+            switch (pattern) {
+              case 'spiral':
+                for (let i = 0; i < 10; i++) {
+                  const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+                  circle.setAttribute("r", 5);
+                  circle.setAttribute("fill", idea.action.parameters.color || "#fff");
+                  circle.style.animation = `spiral${i} ${duration}ms infinite`;
+                  element.appendChild(circle);
+                }
+                break;
+            }
+            this.canvas.appendChild(element);
+            idea.implemented = true;
+            localStorage.setItem('godIdeas', JSON.stringify(godIdeas));
+          }
+        };
+        implementPastIdea();
+        if (Math.random() < 0.3) {
+          this.spawnCollectible(action.parameters.x || 0, action.parameters.y || 0);
+        }
+        if (Math.random() < 0.3) {
+          const newRecipe = {
+            inputs: [this.inventory.items[0]?.type || 'stardust', this.inventory.items[1]?.type || 'cosmicShard'],
+            output: {
+              type: (action.parameters.structure?.type || 'celestial') + 'Essence',
+              color: action.parameters.color || '#ffffff',
+              value: Math.floor(Math.random() * 50 + 25)
+            }
+          };
+          this.crafting.recipes.push(newRecipe);
+        }
       }
-    }
-    document.body.classList.add('ambient-active');
-    setTimeout(() => {
-      document.body.classList.remove('ambient-active');
-      document.body.style.animation = '';
-    }, duration);
-  }
-  startGameLoop() {
-    this.executeState();
-    setInterval(() => {
-      if (!this.cooldown) {
-        this.lastAutonomousMove = Date.now() + 5000;
-        this.cooldown = true;
-        this.executeState();
+
+      handleAmbientAction(action) {
+        if (!action || !action.parameters) return;
+        const duration = action.parameters.duration || 3000;
+        const effects = ['spaceStorm', 'nebulaMist', 'solarWind', 'cosmicRain'];
+        const effect = effects[Math.floor(Math.random() * effects.length)];
+        document.body.style.animation = `${effect} ${duration}ms ease-in-out`;
+        if (action.parameters.pattern === 'particles') {
+          for (let i = 0; i < 30; i++) {
+            const particle = document.createElement('div');
+            particle.className = 'ambient-effect';
+            particle.style.width = '10px';
+            particle.style.height = '10px';
+            particle.style.background = action.parameters.color || '#fff';
+            particle.style.left = Math.random() * window.innerWidth + 'px';
+            particle.style.top = Math.random() * window.innerHeight + 'px';
+            particle.style.filter = `blur(${Math.random() * 5}px)`;
+            document.body.appendChild(particle);
+            const angle = Math.random() * Math.PI * 2;
+            const speed = Math.random() * 100 + 50;
+            particle.style.transform = `translate(
+              ${Math.cos(angle) * speed}px,
+              ${Math.sin(angle) * speed}px
+            )`;
+            setTimeout(() => particle.remove(), duration);
+          }
+        }
+        document.body.classList.add('ambient-active');
         setTimeout(() => {
+          document.body.classList.remove('ambient-active');
+          document.body.style.animation = '';
+        }, duration);
+      }
+
+      startGameLoop() {
+        this.executeState();
+        setInterval(() => {
+          if (!this.cooldown) {
+            this.lastAutonomousMove = Date.now() + 5000;
+            this.cooldown = true;
+            this.executeState();
+            setTimeout(() => {
+              this.cooldown = false;
+            }, 180000);
+          }
+        }, 1000);
+        setInterval(() => {
+          const x = parseFloat(this.npc.getAttribute("cx"));
+          const y = parseFloat(this.npc.getAttribute("cy"));
+          this.canvas.setAttribute('viewBox', `${x - window.innerWidth / 2} ${y - window.innerHeight / 2} ${1000} ${1000}`);
+        }, 100);
+        setInterval(() => {
+          if (Date.now() - this.lastChunkUpdate > 1000) {
+            this.updateVisibleChunks();
+            this.lastChunkUpdate = Date.now();
+          }
+        }, 1000);
+      }
+
+      startCountdown(seconds) {
+        if (!this.timerValue) return;
+        if (this.countdownInterval) {
+          clearInterval(this.countdownInterval);
+        }
+        const updateTimer = () => {
+          const minutes = Math.floor(seconds / 60);
+          const remainingSeconds = seconds % 60;
+          this.timerValue.textContent = `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+        };
+        updateTimer();
+        this.countdownInterval = setInterval(() => {
+          seconds--;
+          updateTimer();
+          if (seconds <= 0) {
+            clearInterval(this.countdownInterval);
+            this.startCountdown(180);
+          }
+        }, 1000);
+      }
+
+      skipCooldown() {
+        if (this.cooldown) {
           this.cooldown = false;
-        }, 180000);
-      }
-    }, 1000);
-    setInterval(() => {
-      const x = parseFloat(this.npc.getAttribute("cx"));
-      const y = parseFloat(this.npc.getAttribute("cy"));
-      this.canvas.style.transform = `translate(${window.innerWidth / 2 - x}px, ${window.innerHeight / 2 - y}px)`;
-    }, 16); 
-    setInterval(() => {
-      this.updateVisibleChunks();
-    }, 100); 
-  }
-  startCountdown(seconds) {
-    if (!this.timerValue) return;
-    if (this.countdownInterval) {
-      clearInterval(this.countdownInterval);
-    }
-    const updateTimer = () => {
-      const minutes = Math.floor(seconds / 60);
-      const remainingSeconds = seconds % 60;
-      this.timerValue.textContent = `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
-    };
-    updateTimer();
-    this.countdownInterval = setInterval(() => {
-      seconds--;
-      updateTimer();
-      if (seconds <= 0) {
-        clearInterval(this.countdownInterval);
-        this.startCountdown(180);
-      }
-    }, 1000);
-  }
-  skipCooldown() {
-    if (this.cooldown) {
-      this.cooldown = false;
-      this.skipBtn.style.opacity = '0.5';
-      setTimeout(() => {
-        this.skipBtn.style.opacity = '1';
-      }, 1000);
-      this.startCountdown(180);
-    }
-  }
-  startAutonomousBehavior() {
-    this.autonomousInterval = setInterval(() => {
-      if (Date.now() - this.lastAutonomousMove > 3000 && this.cooldown) {
-        this.autonomousMove();
-      }
-    }, 2000);
-  }
-  autonomousMove() {
-    if (!this.npc) return; 
-
-    const movements = [{
-      fn: this.wander.bind(this),
-      weight: 3,
-      cooldown: 2000
-    }, {
-      fn: this.explore.bind(this),
-      weight: 2,
-      cooldown: 5000
-    }, {
-      fn: this.interactWithStructure.bind(this),
-      weight: 2,
-      cooldown: 6000
-    }, {
-      fn: this.seekCollectible.bind(this),
-      weight: 4,
-      cooldown: 3000
-    }, {
-      fn: this.orbitNearestStructure.bind(this),
-      weight: 2,
-      cooldown: 7000
-    }, {
-      fn: this.investigateBrightStar.bind(this),
-      weight: 2,
-      cooldown: 4000
-    }, {
-      fn: () => {
-        if (this.inventory.items.length >= 2 && Math.random() < 0.2) {
-          this.crafting.show();
-        }
-      },
-      weight: 1,
-      cooldown: 10000
-    }];
-    if (this.npc) {
-      const totalWeight = movements.reduce((sum, m) => sum + m.weight, 0);
-      let random = Math.random() * totalWeight;
-      for (let movement of movements) {
-        random -= movement.weight;
-        if (random <= 0) {
-          movement.fn();
-          this.lastAutonomousMove = Date.now() + movement.cooldown;
-          break;
-        }
-      }
-    }
-  }
-  wander() {
-    const angle = Math.random() * Math.PI * 2;
-    const distance = Math.random() * 300 + 200;
-    
-    const currentX = parseFloat(this.npc.getAttribute("cx"));
-    const currentY = parseFloat(this.npc.getAttribute("cy"));
-    
-    const newX = currentX + Math.cos(angle) * distance;
-    const newY = currentY + Math.sin(angle) * distance;
-    
-    this.npc.style.transition = "all 2.5s cubic-bezier(0.4, 0, 0.2, 1)";
-    this.npc.setAttribute("cx", newX);
-    this.npc.setAttribute("cy", newY);
-  }
-  explore() {
-    if (this.structures.length === 0) {
-      this.wander();
-      return;
-    }
-
-    const target = this.structures[Math.floor(Math.random() * this.structures.length)];
-    if (!target) {
-      this.wander();
-      return;
-    }
-
-    const targetBounds = target.getBoundingClientRect();
-    const newX = targetBounds.x + targetBounds.width/2;
-    const newY = targetBounds.y + targetBounds.height/2;
-
-    this.npc.style.transition = "all 2.5s cubic-bezier(0.4, 0, 0.2, 1)";
-    this.npc.setAttribute("cx", newX);
-    this.npc.setAttribute("cy", newY);
-  }
-  interactWithStructure() {
-    const nearestStructure = this.findNearestStructure();
-    if (nearestStructure) {
-      const rect = nearestStructure.getBoundingClientRect();
-      const angle = Date.now() / 1000;
-      const radius = 50;
-      this.npc.setAttribute("cx", rect.x + rect.width / 2 + Math.cos(angle) * radius);
-      this.npc.setAttribute("cy", rect.y + rect.height / 2 + Math.sin(angle) * radius);
-    }
-  }
-  findNearestStructure() {
-    if (!this.structures.length) return null;
-    return this.structures[0];
-  }
-  orbitNearestStructure() {
-    const structure = this.findNearestStructure();
-    if (structure) {
-      const rect = structure.getBoundingClientRect();
-      const time = Date.now() / 1000;
-      const radius = 100;
-      const centerX = rect.x + rect.width / 2;
-      const centerY = rect.y + rect.height / 2;
-      this.npc.setAttribute("cx", centerX + Math.cos(time) * radius);
-      this.npc.setAttribute("cy", centerY + Math.sin(time) * radius);
-    }
-  }
-  investigateBrightStar() {
-    const rainbowStars = document.querySelectorAll('.star-rainbow');
-    if (rainbowStars.length > 0) {
-      const star = rainbowStars[Math.floor(Math.random() * rainbowStars.length)];
-      const rect = star.getBoundingClientRect();
-      this.npc.setAttribute("cx", rect.x);
-      this.npc.setAttribute("cy", rect.y);
-    }
-  }
-  seekCollectible() {
-    if (!this.collectibles.length) return;
-    const target = this.collectibles[0];
-    const rect = target.getBoundingClientRect();
-    this.npc.classList.add('npc-collecting');
-    const trail = document.createElement('div');
-    trail.className = 'npc-trail';
-    trail.style.left = this.npc.getAttribute("cx") + 'px';
-    trail.style.top = this.npc.getAttribute("cy") + 'px';
-    document.body.appendChild(trail);
-    this.npc.setAttribute("cx", rect.x + rect.width / 2);
-    this.npc.setAttribute("cy", rect.y + rect.height / 2);
-    setTimeout(() => {
-      this.npc.classList.remove('npc-collecting');
-      target.remove();
-      this.collectibles.shift();
-      trail.remove();
-      const baseItems = JSON.parse(localStorage.getItem('baseCollectibles'));
-      if (baseItems && baseItems.length) {
-        const randomItem = baseItems[Math.floor(Math.random() * baseItems.length)];
-        this.inventory.addItem(randomItem);
-        if (Math.random() < 0.3 && this.inventory.items.length >= 2) {
-          this.crafting.show();
-        }
-      }
-    }, 500);
-  }
-  initAudio() {
-    this.audioContext = new AudioContext();
-    this.audioAnalyser = this.audioContext.createAnalyser();
-    const source = this.audioContext.createMediaElementSource(this.audio);
-    source.connect(this.audioAnalyser);
-    this.audioAnalyser.connect(this.audioContext.destination);
-    this.audioAnalyser.fftSize = 256;
-    this.audioData = new Uint8Array(this.audioAnalyser.frequencyBinCount);
-    this.visualizeAudio();
-  }
-  visualizeAudio() {
-    const stars = document.querySelectorAll('.star');
-    this.audioAnalyser.getByteFrequencyData(this.audioData);
-    stars.forEach((star, i) => {
-      const audioIndex = i % this.audioData.length;
-      const audioValue = this.audioData[audioIndex] / 255;
-      if (audioValue > 0.8) {
-        star.style.animation = 'starAudioPulse 0.5s infinite';
-        if (Math.random() < 0.001) {
-          star.classList.add('star-rainbow');
+          this.skipBtn.style.opacity = '0.5';
           setTimeout(() => {
-            const rect = star.getBoundingClientRect();
-            this.spawnCollectible(rect.x, rect.y);
-            star.classList.remove('star-rainbow');
-          }, 2000);
+            this.skipBtn.style.opacity = '1';
+          }, 1000);
+          this.startCountdown(180);
         }
-      } else {
-        star.style.animation = 'twinkle 3s infinite';
       }
-    });
-    if (Math.random() < 0.001) {
-      const x = Math.random() * window.innerWidth;
-      const y = Math.random() * window.innerHeight;
-      this.spawnCollectible(x, y);
+
+      startAutonomousBehavior() {
+        this.autonomousInterval = setInterval(() => {
+          if (Date.now() - this.lastAutonomousMove > 3000 && this.cooldown) {
+            this.autonomousMove();
+          }
+        }, 2000);
+      }
+
+      autonomousMove() {
+        if (!this.npc) return; // Guard against undefined npc
+    
+        const movements = [{
+          fn: this.wander.bind(this),
+          weight: 3,
+          cooldown: 2000
+        }, {
+          fn: this.explore.bind(this),
+          weight: 2,
+          cooldown: 5000
+        }, {
+          fn: this.interactWithStructure.bind(this),
+          weight: 2,
+          cooldown: 6000
+        }, {
+          fn: this.seekCollectible.bind(this),
+          weight: 4,
+          cooldown: 3000
+        }, {
+          fn: this.orbitNearestStructure.bind(this),
+          weight: 2,
+          cooldown: 7000
+        }, {
+          fn: this.investigateBrightStar.bind(this),
+          weight: 2,
+          cooldown: 4000
+        }, {
+          fn: () => {
+            if (this.inventory.items.length >= 2 && Math.random() < 0.2) {
+              this.crafting.show();
+            }
+          },
+          weight: 1,
+          cooldown: 10000
+        }];
+        // Only proceed if NPC exists
+        if (this.npc) {
+          const totalWeight = movements.reduce((sum, m) => sum + m.weight, 0);
+          let random = Math.random() * totalWeight;
+          for (let movement of movements) {
+            random -= movement.weight;
+            if (random <= 0) {
+              movement.fn();
+              this.lastAutonomousMove = Date.now() + movement.cooldown;
+              break;
+            }
+          }
+        }
+      }
+
+      wander() {
+        const angle = Math.random() * Math.PI * 2;
+        const distance = Math.random() * 300 + 200;
+        const currentX = parseFloat(this.npc.getAttribute("cx"));
+        const currentY = parseFloat(this.npc.getAttribute("cy"));
+        const newX = currentX + Math.cos(angle) * distance;
+        const newY = currentY + Math.sin(angle) * distance;
+        this.npc.classList.add('npc-autonomous');
+        this.npc.setAttribute("cx", newX);
+        this.npc.setAttribute("cy", newY);
+        setTimeout(() => {
+          this.npc.classList.remove('npc-autonomous');
+        }, 2500);
+      }
+
+      explore() {
+        // Only explore if there are structures
+        if (this.structures.length === 0) {
+          this.wander();
+          return;
+        }
+        const target = this.structures[Math.floor(Math.random() * this.structures.length)];
+        if (target) {
+          const transform = target.getAttribute('transform');
+          const coords = transform.match(/translate\(([-+]?\d*\.?\d+),\s*([-+]?\d*\.?\d+)\)/);
+          if (coords) {
+            const newX = parseFloat(coords[1]);
+            const newY = parseFloat(coords[2]);
+            this.npc.setAttribute("cx", newX);
+            this.npc.setAttribute("cy", newY);
+          } else {
+            this.wander();
+          }
+        } else {
+          this.wander();
+        }
+      }
+
+      interactWithStructure() {
+        const nearestStructure = this.findNearestStructure();
+        if (nearestStructure) {
+          const transform = nearestStructure.getAttribute('transform');
+          const coords = transform.match(/translate\(([-+]?\d*\.?\d+),\s*([-+]?\d*\.?\d+)\)/);
+          if (coords) {
+            const structureX = parseFloat(coords[1]);
+            const structureY = parseFloat(coords[2]);
+            const angle = Date.now() / 1000;
+            const radius = 50;
+            const newX = structureX + Math.cos(angle) * radius;
+            const newY = structureY + Math.sin(angle) * radius;
+            this.npc.setAttribute("cx", newX);
+            this.npc.setAttribute("cy", newY);
+          }
+        }
+      }
+
+      findNearestStructure() {
+        if (!this.structures.length) return null;
+        return this.structures[0];
+      }
+
+      orbitNearestStructure() {
+        const structure = this.findNearestStructure();
+        if (structure) {
+          const transform = structure.getAttribute('transform');
+          const coords = transform.match(/translate\(([-+]?\d*\.?\d+),\s*([-+]?\d*\.?\d+)\)/);
+          if (coords) {
+            const centerX = parseFloat(coords[1]);
+            const centerY = parseFloat(coords[2]);
+            const time = Date.now() / 1000;
+            const radius = 100;
+            const newX = centerX + Math.cos(time) * radius;
+            const newY = centerY + Math.sin(time) * radius;
+            this.npc.setAttribute("cx", newX);
+            this.npc.setAttribute("cy", newY);
+          }
+        }
+      }
+
+      investigateBrightStar() {
+        const rainbowStars = document.querySelectorAll('.star-rainbow');
+        if (rainbowStars.length > 0) {
+          const star = rainbowStars[Math.floor(Math.random() * rainbowStars.length)];
+          const cx = parseFloat(star.getAttribute("cx")) + parseFloat(this.canvas.getAttribute('transform').split(',')[0].replace(/translate\(|\)/g, ''));
+          const cy = parseFloat(star.getAttribute("cy")) + parseFloat(this.canvas.getAttribute('transform').split(',')[1].replace(/translate\(|\)/g, ''));
+          this.npc.setAttribute("cx", cx);
+          this.npc.setAttribute("cy", cy);
+        }
+      }
+
+      seekCollectible() {
+        if (!this.collectibles.length) return;
+        const target = this.collectibles[0];
+        const cx = parseFloat(target.getAttribute("cx"));
+        const cy = parseFloat(target.getAttribute("cy"));
+        this.npc.classList.add('npc-collecting');
+        const trail = document.createElement('div');
+        trail.className = 'npc-trail';
+        trail.style.left = `${cx}px`;
+        trail.style.top = `${cy}px`;
+        document.body.appendChild(trail);
+        this.npc.setAttribute("cx", cx);
+        this.npc.setAttribute("cy", cy);
+        setTimeout(() => {
+          this.npc.classList.remove('npc-collecting');
+          target.remove();
+          this.collectibles.shift();
+          trail.remove();
+          const baseItems = JSON.parse(localStorage.getItem('baseCollectibles'));
+          if (baseItems && baseItems.length) {
+            const randomItem = baseItems[Math.floor(Math.random() * baseItems.length)];
+            this.inventory.addItem(randomItem);
+            if (Math.random() < 0.3 && this.inventory.items.length >= 2) {
+              this.crafting.show();
+            }
+          }
+        }, 500);
+      }
+
+      initAudio() {
+        this.audioContext = new AudioContext();
+        this.audioAnalyser = this.audioContext.createAnalyser();
+        const source = this.audioContext.createMediaElementSource(this.audio);
+        source.connect(this.audioAnalyser);
+        this.audioAnalyser.connect(this.audioContext.destination);
+        this.audioAnalyser.fftSize = 256;
+        this.audioData = new Uint8Array(this.audioAnalyser.frequencyBinCount);
+        this.visualizeAudio();
+      }
+
+      visualizeAudio() {
+        const stars = this.canvas.querySelectorAll('.star');
+        this.audioAnalyser.getByteFrequencyData(this.audioData);
+        stars.forEach((star, i) => {
+          const audioIndex = i % this.audioData.length;
+          const audioValue = this.audioData[audioIndex] / 255;
+          if (audioValue > 0.8) {
+            star.style.animation = 'starAudioPulse 0.5s infinite';
+            if (Math.random() < 0.001) {
+              star.classList.add('star-rainbow');
+              setTimeout(() => {
+                const cx = parseFloat(star.getAttribute("cx"));
+                const cy = parseFloat(star.getAttribute("cy"));
+                this.spawnCollectible(cx, cy);
+                star.classList.remove('star-rainbow');
+              }, 2000);
+            }
+          } else {
+            star.style.animation = 'twinkle 3s infinite';
+          }
+        });
+        if (Math.random() < 0.001) {
+          const x = Math.random() * 10000 - 5000;
+          const y = Math.random() * 10000 - 5000;
+          this.spawnCollectible(x, y);
+        }
+        requestAnimationFrame(() => this.visualizeAudio());
+      }
+
+      spawnCollectible(x, y) {
+        const collectible = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+        collectible.setAttribute("cx", x);
+        collectible.setAttribute("cy", y);
+        collectible.setAttribute("r", 10);
+        collectible.setAttribute("fill", "yellow");
+        collectible.classList.add('collectible');
+        this.canvas.appendChild(collectible);
+        this.collectibles.push(collectible);
+      }
     }
-    requestAnimationFrame(() => this.visualizeAudio());
-  }
-  spawnCollectible(x, y) {
-    const collectible = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-    collectible.setAttribute("cx", x);
-    collectible.setAttribute("cy", y);
-    collectible.setAttribute("r", 10);
-    collectible.setAttribute("fill", "yellow");
-    collectible.classList.add('collectible');
-    this.canvas.appendChild(collectible);
-    this.collectibles.push(collectible);
-  }
-}
-class NPCInventory {
-  constructor() {
-    this.items = [];
-    this.maxSize = 10;
-    this.element = document.getElementById('inventory-items');
-    this.updateDisplay();
-  }
-  addItem(item) {
-    if (this.items.length < this.maxSize) {
-      this.items.push(item);
-      this.updateDisplay();
-      return true;
-    }
-    return false;
-  }
-  removeItem(index) {
-    if (index >= 0 && index < this.items.length) {
-      const removed = this.items.splice(index, 1)[0];
-      this.updateDisplay();
-      return removed;
-    }
-    return null;
-  }
-  updateDisplay() {
-    if (!this.element) return;
-    this.element.innerHTML = this.items.map((item, i) => `
-      <div class="npc-inventory-item">
-        <span style="color:${item.color}">${item.type}</span>
-        <span>${item.value}</span>
-      </div>
-    `).join('');
-  }
-}
-class NPCCrafting {
-  constructor(inventory) {
-    this.inventory = inventory;
-    this.recipes = [{
-      inputs: ['stardust', 'stardust'],
-      output: {
-        type: 'starEssence',
-        color: '#88ffff',
-        value: 25
+
+    class NPCInventory {
+      constructor() {
+        this.items = [];
+        this.maxSize = 10;
+        this.element = document.getElementById('inventory-items');
+        this.updateDisplay();
       }
-    }, {
-      inputs: ['cosmicShard', 'voidEssence'],
-      output: {
-        type: 'spaceTime',
-        color: '#ff88ff',
-        value: 75
+      addItem(item) {
+        if (this.items.length < this.maxSize) {
+          this.items.push(item);
+          this.updateDisplay();
+          return true;
+        }
+        return false;
       }
-    }];
-    this.element = document.getElementById('npc-crafting');
-    this.gridElement = document.getElementById('crafting-grid');
-    this.craftBtn = document.getElementById('craft-btn');
-    this.setupEvents();
-  }
-  setupEvents() {
-    if (this.craftBtn) {
-      this.craftBtn.addEventListener('click', () => this.tryCraft());
-    }
-  }
-  show() {
-    this.element?.classList.add('active');
-  }
-  hide() {
-    this.element?.classList.remove('active');
-  }
-  tryCraft() {
-    const availableTypes = this.inventory.items.map(item => item.type);
-    for (const recipe of this.recipes) {
-      if (this.canCraft(recipe, availableTypes)) {
-        this.craft(recipe);
-        break;
+      removeItem(index) {
+        if (index >= 0 && index < this.items.length) {
+          const removed = this.items.splice(index, 1)[0];
+          this.updateDisplay();
+          return removed;
+        }
+        return null;
+      }
+      updateDisplay() {
+        if (!this.element) return;
+        this.element.innerHTML = this.items.map((item, i) => `
+          <div class="npc-inventory-item">
+            <span style="color:${item.color}">${item.type}</span>
+            <span>${item.value}</span>
+          </div>
+        `).join('');
       }
     }
-  }
-  canCraft(recipe, availableTypes) {
-    const itemCounts = {};
-    availableTypes.forEach(type => {
-      itemCounts[type] = (itemCounts[type] || 0) + 1;
-    });
-    return recipe.inputs.every(input => {
-      if (itemCounts[input] > 0) {
-        itemCounts[input]--;
-        return true;
+
+    class NPCCrafting {
+      constructor(inventory) {
+        this.inventory = inventory;
+        this.recipes = [{
+          inputs: ['stardust', 'stardust'],
+          output: {
+            type: 'starEssence',
+            color: '#88ffff',
+            value: 25
+          }
+        }, {
+          inputs: ['cosmicShard', 'voidEssence'],
+          output: {
+            type: 'spaceTime',
+            color: '#ff88ff',
+            value: 75
+          }
+        }];
+        this.element = document.getElementById('npc-crafting');
+        this.gridElement = document.getElementById('crafting-grid');
+        this.craftBtn = document.getElementById('craft-btn');
+        this.setupEvents();
       }
-      return false;
-    });
-  }
-  craft(recipe) {
-    recipe.inputs.forEach(input => {
-      const index = this.inventory.items.findIndex(item => item.type === input);
-      if (index !== -1) {
-        this.inventory.removeItem(index);
+      setupEvents() {
+        if (this.craftBtn) {
+          this.craftBtn.addEventListener('click', () => this.tryCraft());
+        }
       }
-    });
-    this.inventory.addItem(recipe.output);
-    this.hide();
-  }
-}
-const game = new Game();</script>
+      show() {
+        this.element?.classList.add('active');
+      }
+      hide() {
+        this.element?.classList.remove('active');
+      }
+      tryCraft() {
+        const availableTypes = this.inventory.items.map(item => item.type);
+        for (const recipe of this.recipes) {
+          if (this.canCraft(recipe, availableTypes)) {
+            this.craft(recipe);
+            break;
+          }
+        }
+      }
+      canCraft(recipe, availableTypes) {
+        const itemCounts = {};
+        availableTypes.forEach(type => {
+          itemCounts[type] = (itemCounts[type] || 0) + 1;
+        });
+        return recipe.inputs.every(input => {
+          if (itemCounts[input] > 0) {
+            itemCounts[input]--;
+            return true;
+          }
+          return false;
+        });
+      }
+      craft(recipe) {
+        recipe.inputs.forEach(input => {
+          const index = this.inventory.items.findIndex(item => item.type === input);
+          if (index !== -1) {
+            this.inventory.removeItem(index);
+          }
+        });
+        this.inventory.addItem(recipe.output);
+        this.hide();
+      }
+    }
+
+    const game = new Game();
+  </script>
 <script defer src="https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516" integrity="sha512-8DS7rgIrAmghBFwoOTujcf6D9rXvH8xm8JQ1Ja01h9QX8EzXldiszufYa4IFfKdLUKTTrnSFXLDkUEOTrZQ8Qg==" data-cf-beacon='{"version":"2024.11.0","token":"4c6229722a6346bc8eb5cb0e5eae5d41","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
-</body></html>
+</body>
+</html>
