@@ -526,22 +526,28 @@ interface Response {
   async executeState() {
     const states = [GameState.NPC, GameState.GOD, GameState.AMBIENT];
     this.currentState = states[Math.floor(Math.random() * states.length)];
-    this.stateIndicator.textContent = `Current State: ${this.currentState}`;
-    this.stateIndicator.style.background = this.currentState === GameState.NPC ? 'rgba(0,255,255,0.3)' : this.currentState === GameState.GOD ? 'rgba(255,0,255,0.3)' : 'rgba(255,255,0,0.3)';
-    const action = await this.getAIAction(this.currentState);
-    if (action) {
-      this.logAction(`${this.currentState}: ${action.description}`);
-      switch (this.currentState) {
-        case GameState.NPC:
-          this.handleNPCAction(action);
-          break;
-        case GameState.GOD:
-          this.handleGodAction(action);
-          break;
-        case GameState.AMBIENT:
-          this.handleAmbientAction(action);
-          break;
+    if (this.stateIndicator) {
+      this.stateIndicator.textContent = `Current State: ${this.currentState}`;
+      this.stateIndicator.style.background = this.currentState === GameState.NPC ? 'rgba(0,255,255,0.3)' : this.currentState === GameState.GOD ? 'rgba(255,0,255,0.3)' : 'rgba(255,255,0,0.3)';
+    }
+    try {
+      const action = await this.getAIAction(this.currentState);
+      if (action) {
+        this.logAction(`${this.currentState}: ${action.description}`);
+        switch (this.currentState) {
+          case GameState.NPC:
+            this.handleNPCAction(action);
+            break;
+          case GameState.GOD:
+            this.handleGodAction(action);
+            break;
+          case GameState.AMBIENT:
+            this.handleAmbientAction(action);
+            break;
+        }
       }
+    } catch (error) {
+      console.error('Error executing state:', error);
     }
   }
   handleNPCAction(action) {
@@ -647,7 +653,7 @@ interface Response {
     }
   }
   handleAmbientAction(action) {
-    if (!action) return;
+    if (!action || !action.parameters) return;
     const duration = action.parameters.duration || 3000;
     const effects = ['spaceStorm', 'nebulaMist', 'solarWind', 'cosmicRain'];
     const effect = effects[Math.floor(Math.random() * effects.length)];
