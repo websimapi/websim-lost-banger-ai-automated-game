@@ -330,6 +330,79 @@
       align-items: center;
       justify-content: center;
     }
+
+    .toggle-container {
+      position: fixed;
+      bottom: 70px;
+      right: 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: white;
+      background: rgba(0,0,0,0.7);
+      padding: 10px;
+      border-radius: 10px;
+      z-index: 100;
+    }
+    
+    .toggle-switch {
+      position: relative;
+      display: inline-block;
+      width: 60px;
+      height: 34px;
+    }
+
+    .toggle-switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .toggle-slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: #ccc;
+      -webkit-transition: .4s;
+      transition: .4s;
+    }
+
+    .toggle-slider:before {
+      position: absolute;
+      content: "";
+      height: 26px;
+      width: 26px;
+      left: 4px;
+      bottom: 4px;
+      background-color: white;
+      -webkit-transition: .4s;
+      transition: .4s;
+    }
+
+    input:checked + .toggle-slider {
+      background-color: #2196F3;
+    }
+
+    input:focus + .toggle-slider {
+      box-shadow: 0 0 1px #2196F3;
+    }
+
+    input:checked + .toggle-slider:before {
+      -webkit-transform: translateX(26px);
+      -ms-transform: translateX(26px);
+      transform: translateX(26px);
+    }
+
+    .toggle-slider.round {
+      border-radius: 34px;
+    }
+
+    .toggle-slider.round:before {
+      border-radius: 50%;
+    }
   </style>
 </head>
 <body>
@@ -344,8 +417,18 @@
     <h3>Inventory</h3>
     <div id="inventory-items"></div>
   </div>
+  <div class="toggle-container">
+    <label class="toggle-switch">
+      <input type="checkbox" id="prevent-idle-toggle" checked>
+      <span class="toggle-slider round"></span>
+    </label>
+    <span>Prevent Idle NPC</span>
+  </div>
   <div id="action-queue" class="action-queue">
-    <h3>Action Queue</h3>
+    <h4>Action Queue</h4>
+    <div class="priority-list"></div>
+    <div class="current-action"></div>
+    <button class="force-action-btn" id="force-action-btn">Force New Action</button>
   </div>
   <div id="npc-crafting" class="npc-crafting">
     <h3>Crafting</h3>

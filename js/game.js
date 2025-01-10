@@ -40,6 +40,11 @@ export class Game {
     this.moveAnimation = null;
     this.idleTimeout = 15000; 
     this.actionTimeout = null;
+
+    this.preventIdle = true;
+    this.actionCheckInterval = null;
+    this.lastActionTime = Date.now();
+
     if (!localStorage.getItem('baseCollectibles')) {
       localStorage.setItem('baseCollectibles', JSON.stringify([{
         type: 'stardust',
@@ -58,10 +63,30 @@ export class Game {
     if (!localStorage.getItem('godIdeas')) {
       localStorage.setItem('godIdeas', JSON.stringify([]));
     }
+
     this.canvas.style.visibility = 'hidden';
     this.initializeUI();
+
     if (this.startBtn) {
       this.startBtn.addEventListener('click', () => this.startGame());
+    }
+
+    const idleToggle = document.getElementById('prevent-idle-toggle');
+    if (idleToggle) {
+      idleToggle.checked = this.preventIdle;
+      idleToggle.addEventListener('change', (e) => {
+        this.preventIdle = e.target.checked;
+        if (this.preventIdle) {
+          this.scheduleNextAction();
+        }
+      });
+    }
+
+    const forceActionBtn = document.getElementById('force-action-btn');
+    if (forceActionBtn) {
+      forceActionBtn.addEventListener('click', () => {
+        this.forceNewAction();
+      });
     }
 
     this.actionQueue = [];
@@ -74,7 +99,6 @@ export class Game {
       investigate: 0
     };
     
-    // Action cooldowns in milliseconds
     this.actionCooldowns = {
       collect: 3000,
       craft: 5000,
@@ -119,7 +143,6 @@ export class Game {
     this.updateVisibleChunks();
     this.updateCamera(); 
     this.lastAutonomousMove = Date.now();
-    this.autonomousMove();
   }
 
   updateVisibleChunks() {
@@ -179,23 +202,20 @@ export class Game {
       collect: 0,
       craft: 0,
       place: 0,
-      explore: 0,
-      investigate: 0
+      investigate: 0,
+      explore: 0
     };
 
-    // Collection priority
-    const nearestCollectible = this.findNearestCollectible();
-    if (nearestCollectible) {
-      const distance = this.getDistanceToCollectible(nearestCollectible);
+    const nearest = this.findNearestCollectible();
+    if (nearest) {
+      const distance = this.getDistanceToCollectible(nearest);
       priorities.collect = Math.max(0, 100 - distance / 10);
       
-      // Boost collection priority when inventory is low
       if (this.inventory.items.length < 3) {
         priorities.collect += 50;
       }
     }
 
-    // Crafting priority
     if (this.inventory.items.length >= 2) {
       const canCraft = this.crafting.recipes.some(recipe => 
         this.crafting.canCraft(recipe)
@@ -205,25 +225,21 @@ export class Game {
       }
     }
 
-    // Placing priority
     if (this.inventory.items.some(item => 
       item.type.includes('Essence') || item.type.includes('Time')
     )) {
-      priorities.place = 40;
+      priorities.place = 40 + (Math.random() * 20); 
     }
 
-    // Investigation priority
     const unexploredStructures = this.structures.filter(s => !s.explored);
     if (unexploredStructures.length > 0) {
       priorities.investigate = 20 + (unexploredStructures.length * 5);
     }
 
-    // Exploration priority (when other priorities are low)
     if (Object.values(priorities).every(p => p < 30)) {
-      priorities.explore = 25;
+      priorities.explore = 25 + (Math.random() * 15);
     }
 
-    // Apply cooldown penalties
     Object.keys(priorities).forEach(action => {
       const timeSinceLastAction = Date.now() - this.lastActionTimes[action];
       if (timeSinceLastAction < this.actionCooldowns[action]) {
@@ -262,17 +278,14 @@ export class Game {
       const npcX = parseFloat(this.npc.getAttribute("cx"));
       const npcY = parseFloat(this.npc.getAttribute("cy"));
       
-      // Find a suitable placement location
       const angle = Math.random() * Math.PI * 2;
       const distance = 100 + Math.random() * 200;
       const placeX = npcX + Math.cos(angle) * distance;
       const placeY = npcY + Math.sin(angle) * distance;
 
-      // Create the structure
       const structure = document.createElementNS("http://www.w3.org/2000/svg", "g");
       structure.classList.add('god-structure');
       
-      // Different structures based on item type
       if (craftedItem.type.includes('Star')) {
         structure.innerHTML = `
           <circle r="20" fill="none" stroke="${craftedItem.color}" stroke-width="2">
@@ -290,7 +303,6 @@ export class Game {
       this.canvas.appendChild(structure);
       this.structures.push(structure);
 
-      // Remove item from inventory
       const itemIndex = this.inventory.items.findIndex(item => item === craftedItem);
       if (itemIndex !== -1) {
         this.inventory.removeItem(itemIndex);
@@ -303,7 +315,6 @@ export class Game {
   exploreStructures() {
     if (!this.npc || this.structures.length === 0) return;
 
-    // Find nearest unexplored structure
     const npcX = parseFloat(this.npc.getAttribute("cx"));
     const npcY = parseFloat(this.npc.getAttribute("cy"));
     
@@ -368,14 +379,12 @@ export class Game {
     const startX = parseFloat(this.npc.getAttribute("cx"));
     const startY = parseFloat(this.npc.getAttribute("cy"));
     
-    // Add small random offset for more natural movement
     const offsetX = (Math.random() - 0.5) * 20;
     const offsetY = (Math.random() - 0.5) * 20;
     
     const finalTargetX = targetX + offsetX;
     const finalTargetY = targetY + offsetY;
 
-    // Don't move if already very close to target
     if (Math.abs(finalTargetX - startX) < 5 && Math.abs(finalTargetY - startY) < 5) {
       this.isMoving = false;
       this.npc.classList.remove('npc-collecting');
@@ -389,7 +398,6 @@ export class Game {
       cancelAnimationFrame(this.moveAnimation);
     }
 
-    // Create movement trail
     const createTrail = () => {
       const trail = document.createElementNS("http://www.w3.org/2000/svg", "circle");
       trail.setAttribute("cx", this.npc.getAttribute("cx"));
@@ -404,7 +412,6 @@ export class Game {
       const elapsed = currentTime - startTime;
       const progress = Math.min(elapsed / duration, 1);
       
-      // Smooth easing function
       const easeProgress = progress < 0.5 
         ? 2 * progress * progress 
         : 1 - Math.pow(-2 * progress + 2, 2) / 2;
@@ -415,7 +422,6 @@ export class Game {
       this.npc.setAttribute("cx", currentX);
       this.npc.setAttribute("cy", currentY);
       
-      // Create trail effect
       if (Math.random() < 0.2) {
         createTrail();
       }
@@ -433,7 +439,6 @@ export class Game {
     };
     
     this.moveAnimation = requestAnimationFrame(animate);
-    this.lastAutonomousMove = Date.now();
   }
 
   moveTowardsCollectible(collectible) {
@@ -444,171 +449,98 @@ export class Game {
     this.moveTowards(collectible.x, collectible.y, duration);
   }
 
-  autonomousMove() {
-    if (!this.npc || this.isMoving || this.cooldown) return;
-
-    this.checkNextAction();
-  }
-
-  checkCollisions() {
-    if (!this.npc) return;
-    
-    const npcX = parseFloat(this.npc.getAttribute("cx"));
-    const npcY = parseFloat(this.npc.getAttribute("cy"));
-    const pickupDistance = 40;
-
-    for (let i = this.collectibles.length - 1; i >= 0; i--) {
-      const collectible = this.collectibles[i];
-      if (!collectible.collected) {
-        const dx = npcX - collectible.x;
-        const dy = npcY - collectible.y;
-        const distance = Math.hypot(dx, dy);
-        
-        if (distance < pickupDistance) {
-          collectible.collected = true;
-          collectible.element.remove();
-          
-          const item = {
-            type: collectible.type,
-            color: '#ffff00',
-            value: collectible.value
-          };
-          
-          this.inventory.addItem(item);
-          this.logAction(`Collected ${item.type} (${item.value})`);
-          this.crafting.checkAndCraft();
-          
-          this.collectibles.splice(i, 1);
-          
-          setTimeout(() => this.checkNextAction(), 100);
-        }
-      }
-    }
-  }
-
-  startAutonomousBehavior() {
-    if (this.autonomousInterval) {
-      clearInterval(this.autonomousInterval);
-    }
-
-    this.autonomousInterval = setInterval(() => {
-      if (!this.cooldown) {
-        this.autonomousMove();
-      }
-    }, 500);
-  }
-
   checkNextAction() {
-    if (this.cooldown || this.isCrafting || this.isMoving) return;
-
-    const priorities = this.evaluateActionPriorities();
-    const highestPriority = Math.max(...Object.values(priorities));
-    const highestPriorityAction = Object.entries(priorities)
-      .find(([_, value]) => value === highestPriority)?.[0];
-
-    // Force action if idle too long
-    if (Date.now() - this.lastAutonomousMove > this.idleTimeout) {
-      this.exploreNewChunks();
-      return;
-    }
-
-    switch (highestPriorityAction) {
-      case 'collect':
-        const nearest = this.findNearestCollectible();
-        if (nearest) {
-          this.moveTowardsCollectible(nearest);
-        } else {
-          this.exploreNewChunks();
-        }
-        break;
-      
-      case 'craft':
-        this.crafting.checkAndCraft();
-        break;
-      
-      case 'place':
-        this.placeCreation();
-        break;
-      
-      case 'investigate':
-        this.exploreStructures();
-        break;
-      
-      case 'explore':
-        if (Math.random() < 0.3) {
-          this.exploreStructures();
-        } else {
-          this.exploreNewChunks();
-        }
-        break;
-    }
-
-    // Schedule next check if not moving
-    if (!this.isMoving && !this.isCrafting) {
-      setTimeout(() => this.checkNextAction(), 100);
-    }
+    this.determineAndExecuteAction();
   }
 
   updateActionQueueDisplay() {
-    if (this.queueDisplay) {
-      const priorityList = Object.entries(this.actionPriorities)
-        .sort(([,a], [,b]) => b - a)
-        .map(([action, priority]) => {
-          const cooldown = Math.max(0, this.actionCooldowns[action] - 
-            (Date.now() - this.lastActionTimes[action]));
-          const cooldownStr = cooldown > 0 ? ` (${(cooldown/1000).toFixed(1)}s)` : '';
-          return `${action}: ${priority.toFixed(1)}${cooldownStr}`;
-        })
-        .join('<br>');
+    const queueDisplay = document.getElementById('action-queue');
+    if (!queueDisplay) return;
+
+    const priorityList = Object.entries(this.actionPriorities)
+      .sort(([,a], [,b]) => b - a)
+      .map(([action, priority]) => {
+        const cooldown = Math.max(0, this.actionCooldowns[action] - 
+          (Date.now() - this.lastActionTimes[action]));
+        const cooldownStr = cooldown > 0 ? ` (${(cooldown/1000).toFixed(1)}s)` : '';
+        return `${action}: ${priority.toFixed(1)}${cooldownStr}`;
+      })
+      .join('<br>');
+
+    const currentAction = this.isMoving ? 'Moving' :
+      this.isCrafting ? 'Crafting' :
+      this.cooldown ? 'Cooling down' :
+      'Deciding next action';
+
+    queueDisplay.innerHTML = `
+      <h4>Action Queue</h4>
+      <div class="priority-list">${priorityList}</div>
+      <div class="current-action">${currentAction}</div>
+      <button class="force-action-btn" id="force-action-btn">Force New Action</button>
+    `;
+  }
+
+  forceNewAction() {
+    this.determineAndExecuteAction();
+    this.lastActionTime = Date.now();
+  }
+
+  scheduleNextAction() {
+    if (!this.started) return;
+    
+    clearTimeout(this.actionTimeout);
+    
+    if (this.preventIdle) {
+      const timeSinceLastAction = Date.now() - this.lastActionTime;
       
-      this.queueDisplay.innerHTML = `
-        <div class="priority-list">
-          <h4>Action Priorities:</h4>
-          ${priorityList}
-        </div>
-        <div class="current-action">
-          ${this.isMoving ? 'Moving...' : 
-            this.isCrafting ? 'Crafting...' : 
-            this.cooldown ? 'Cooling down...' : 
-            'Idle'}
-        </div>`;
+      if (timeSinceLastAction >= 5000 && !this.isMoving && !this.isCrafting && !this.cooldown) {
+        this.determineAndExecuteAction();
+        this.lastActionTime = Date.now();
+      }
+      
+      this.actionTimeout = setTimeout(() => {
+        this.scheduleNextAction();
+      }, 1000); 
     }
   }
 
   determineAndExecuteAction() {
     if (this.isMoving || this.isCrafting || this.cooldown) {
-      this.updateActionQueueDisplay();
       return;
     }
 
     const priorities = this.evaluateActionPriorities();
-    const highestPriority = Math.max(...Object.values(priorities));
-    
-    if (highestPriority === 0) {
+    let highestPriority = -1;
+    let chosenAction = null;
+
+    Object.entries(priorities).forEach(([action, priority]) => {
+      const randomFactor = Math.random() * 10;
+      const adjustedPriority = priority + randomFactor;
+      
+      if (adjustedPriority > highestPriority) {
+        const cooldownRemaining = this.actionCooldowns[action] - 
+          (Date.now() - this.lastActionTimes[action]);
+        
+        if (cooldownRemaining <= 0) {
+          highestPriority = adjustedPriority;
+          chosenAction = action;
+        }
+      }
+    });
+
+    if (chosenAction) {
+      this.executeAction(chosenAction);
+    } else if (this.preventIdle) {
       this.exploreNewChunks();
-      return;
     }
 
-    const availableActions = Object.entries(priorities)
-      .filter(([action, priority]) => {
-        const timeSinceLastAction = Date.now() - this.lastActionTimes[action];
-        return priority === highestPriority && 
-               timeSinceLastAction >= this.actionCooldowns[action];
-      })
-      .map(([action]) => action);
+    this.updateActionQueueDisplay();
+  }
 
-    if (availableActions.length === 0) {
-      this.exploreNewChunks();
-      return;
-    }
-
-    const chosenAction = availableActions[
-      Math.floor(Math.random() * availableActions.length)
-    ];
-
-    this.lastActionTimes[chosenAction] = Date.now();
+  executeAction(action) {
+    this.lastActionTimes[action] = Date.now();
     
-    switch (chosenAction) {
+    switch (action) {
       case 'collect':
         const nearest = this.findNearestCollectible();
         if (nearest) {
@@ -616,50 +548,34 @@ export class Game {
           this.logAction('Moving to collect stardust');
         }
         break;
-        
+      
       case 'craft':
         if (!this.crafting.isCrafting) {
           this.crafting.checkAndCraft();
           this.logAction('Starting crafting process');
         }
         break;
-        
+      
       case 'place':
         this.placeCreation();
         this.logAction('Placing creation in space');
         break;
-        
+      
       case 'investigate':
         this.exploreStructures();
         this.logAction('Investigating cosmic structure');
         break;
-        
+      
       case 'explore':
-        this.exploreNewChunks();
-        this.logAction('Exploring new areas');
+        if (Math.random() < 0.3) {
+          this.exploreStructures();
+          this.logAction('Investigating surroundings');
+        } else {
+          this.exploreNewChunks();
+          this.logAction('Exploring new areas');
+        }
         break;
     }
-
-    this.updateActionQueueDisplay();
-  }
-
-  spawnCollectible(x, y) {
-    const collectible = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-    collectible.setAttribute("cx", x);
-    collectible.setAttribute("cy", y);
-    collectible.setAttribute("r", 8);
-    collectible.setAttribute("fill", "yellow");
-    collectible.classList.add('collectible');
-    this.canvas.appendChild(collectible);
-    
-    this.collectibles.push({
-      element: collectible,
-      x: x,
-      y: y,
-      collected: false,
-      type: 'stardust',
-      value: Math.floor(Math.random() * 20) + 10,
-    });
   }
 
   startGame() {
@@ -668,64 +584,21 @@ export class Game {
     this.started = true;
     this.canvas.style.visibility = 'visible';
     
-    // Show UI elements
-    this.startBtn?.classList.add('hidden');
-    this.skipBtn?.classList.remove('hidden');
-    this.stateIndicator?.classList.remove('hidden');
-    this.actionLog?.classList.remove('hidden');
-    this.countdownTimer?.classList.remove('hidden');
-    
-    // Initialize game systems
     this.initialize();
     this.inventory.show();
     
-    // Start audio if available
     this.audio?.play().catch(e => console.log('Audio playback failed:', e));
     this.initAudio();
     
-    // Start game systems
     this.startGameLoop();
     this.startCountdown(180);
-    this.startAutonomousBehavior();
+    this.scheduleNextAction();
 
-    // Initial NPC position and camera focus
     if (this.npc) {
       this.npc.setAttribute("cx", "0");
       this.npc.setAttribute("cy", "0");
       this.updateCamera();
     }
-
-    // Ensure NPC starts taking actions immediately
-    this.scheduleNextAction();
-  }
-
-  scheduleNextAction() {
-    if (!this.started) return;
-    
-    clearTimeout(this.actionTimeout);
-    
-    // Schedule next action in 5 seconds
-    this.actionTimeout = setTimeout(() => {
-      if (!this.cooldown && !this.isCrafting && !this.isMoving) {
-        this.determineAndExecuteAction();
-      }
-      this.scheduleNextAction();
-    }, 5000);
-  }
-
-  initializeUI() {
-    // Hide all UI elements initially
-    this.skipBtn?.classList.add('hidden');
-    this.stateIndicator?.classList.add('hidden');
-    this.actionLog?.classList.add('hidden');
-    this.countdownTimer?.classList.add('hidden');
-    
-    // Ensure inventory is hidden
-    const inventory = document.getElementById('npc-inventory');
-    if (inventory) inventory.classList.add('hidden');
-    
-    // Clear any existing content
-    this.canvas.innerHTML = '';
   }
 
   startGameLoop() {
@@ -1103,5 +976,72 @@ interface Response {
       document.body.classList.remove('ambient-active');
       document.body.style.animation = '';
     }, duration);
+  }
+
+  checkCollisions() {
+    if (!this.npc) return;
+    
+    const npcX = parseFloat(this.npc.getAttribute("cx"));
+    const npcY = parseFloat(this.npc.getAttribute("cy"));
+    const pickupDistance = 40;
+
+    for (let i = this.collectibles.length - 1; i >= 0; i--) {
+      const collectible = this.collectibles[i];
+      if (!collectible.collected) {
+        const dx = npcX - collectible.x;
+        const dy = npcY - collectible.y;
+        const distance = Math.hypot(dx, dy);
+        
+        if (distance < pickupDistance) {
+          collectible.collected = true;
+          collectible.element.remove();
+          
+          const item = {
+            type: collectible.type,
+            color: '#ffff00',
+            value: collectible.value
+          };
+          
+          this.inventory.addItem(item);
+          this.logAction(`Collected ${item.type} (${item.value})`);
+          this.crafting.checkAndCraft();
+          
+          this.collectibles.splice(i, 1);
+          
+          setTimeout(() => this.checkNextAction(), 100);
+        }
+      }
+    }
+  }
+
+  initializeUI() {
+    this.skipBtn?.classList.add('hidden');
+    this.stateIndicator?.classList.add('hidden');
+    this.actionLog?.classList.add('hidden');
+    this.countdownTimer?.classList.add('hidden');
+    
+    const inventory = document.getElementById('npc-inventory');
+    if (inventory) inventory.classList.add('hidden');
+    
+    this.canvas.innerHTML = '';
+  }
+
+  spawnCollectible(x, y) {
+    const collectible = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+    collectible.setAttribute("cx", x);
+    collectible.setAttribute("cy", y);
+    collectible.setAttribute("r", 8);
+    collectible.setAttribute("fill", "yellow");
+    collectible.classList.add('collectible');
+    this.canvas.appendChild(collectible);
+    
+    this.collectibles.push({
+      element: collectible,
+      x: x,
+      y: y,
+      collected: false,
+      type: 'stardust',
+      value: Math.floor(Math.random() * 20) + 10,
+    });
   }
 }
