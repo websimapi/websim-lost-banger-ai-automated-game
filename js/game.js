@@ -35,10 +35,10 @@ export class Game {
     this.spawnedStructures = [];
     this.npc = null;
     this.lastAutonomousMove = Date.now();
-    this.idleTimeout = 15000; 
     this.lastChunkUpdateX = null;
     this.lastChunkUpdateY = null;
     this.moveAnimation = null;
+    this.idleTimeout = 15000; 
     if (!localStorage.getItem('baseCollectibles')) {
       localStorage.setItem('baseCollectibles', JSON.stringify([{
         type: 'stardust',
@@ -149,7 +149,7 @@ export class Game {
     let minDist = Infinity;
     
     // Only consider uncollected items 
-    const activeCollectibles = this.collectibles.filter(c => !c.collected && !c.targetted);
+    const activeCollectibles = this.collectibles.filter(c => !c.collected);
     
     if (activeCollectibles.length === 0) {
       return null;
@@ -160,16 +160,12 @@ export class Game {
       const dy = collectible.y - npcY;
       const distance = Math.hypot(dx, dy);
       
-      // Consider items within reasonable range
-      if (distance < 1000 && distance < minDist) {
+      // Consider all items
+      if (distance < minDist) {
         minDist = distance;
         nearest = collectible;
       }
     });
-
-    if (nearest) {
-      nearest.targetted = true; // Mark as being targeted to prevent multiple NPCs targeting same item
-    }
     
     return nearest;
   }
@@ -266,8 +262,9 @@ export class Game {
     const startTime = performance.now();
     
     // Ensure we're not trying to move to our current position
-    if (Math.abs(targetX - startX) < 10 && Math.abs(targetY - startY) < 10) {
+    if (Math.abs(targetX - startX) < 1 && Math.abs(targetY - startY) < 1) {
       this.isMoving = false;
+      this.npc.classList.remove('npc-collecting');
       this.checkNextAction();
       return;
     }
@@ -291,6 +288,7 @@ export class Game {
       } else {
         this.isMoving = false;
         this.moveAnimation = null;
+        this.npc.classList.remove('npc-collecting');
         this.checkNextAction(); // Queue up next action immediately
       }
     };
@@ -308,14 +306,8 @@ export class Game {
 
   autonomousMove() {
     if (!this.npc || this.isMoving || this.cooldown) return;
-    
-    const now = Date.now();
-    const timeSinceLastMove = now - this.lastAutonomousMove;
 
-    if (timeSinceLastMove > this.idleTimeout) {
-      this.checkNextAction();
-      this.lastAutonomousMove = now;
-    }
+    this.checkNextAction();
   }
 
   spawnCollectible(x, y) {
@@ -335,7 +327,6 @@ export class Game {
       collected: false,
       type: 'stardust',
       value: Math.floor(Math.random() * 20) + 10,
-      targetted: false
     });
   }
 
@@ -384,7 +375,7 @@ export class Game {
       clearInterval(this.autonomousInterval);
     }
 
-    // Check for actions more frequently
+    // Check for actions frequently
     this.autonomousInterval = setInterval(() => {
       if (!this.cooldown) {
         this.autonomousMove();
