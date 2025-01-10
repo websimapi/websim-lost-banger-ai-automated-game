@@ -202,9 +202,42 @@
     animation: starRainbow 2s infinite;
   }
 
+  .npc-trail {
+    position: absolute;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.8);
+    pointer-events: none;
+    mix-blend-mode: screen;
+    animation: fadeTrail 1s forwards;
+  }
+
+  @keyframes fadeTrail {
+    0% { transform: scale(1); opacity: 0.8; }
+    100% { transform: scale(0); opacity: 0; }
+  }
+
   .collectible {
+    animation: collectiblePulse 2s infinite;
     filter: drop-shadow(0 0 10px gold);
-    animation: glow 2s infinite;
+  }
+
+  @keyframes collectiblePulse {
+    0% { r: 8; fill: yellow; }
+    50% { r: 12; fill: gold; }
+    100% { r: 8; fill: yellow; }
+  }
+
+  .npc-collecting {
+    animation: collectingGlow 0.5s infinite;
+    filter: drop-shadow(0 0 20px white);
+  }
+
+  @keyframes collectingGlow {
+    0% { filter: drop-shadow(0 0 10px white); }
+    50% { filter: drop-shadow(0 0 30px gold); }
+    100% { filter: drop-shadow(0 0 10px white); }
   }
 
   .npc-inventory {
@@ -603,10 +636,7 @@ interface Response {
     }
     if (Math.random() < 0.3) {
       const newRecipe = {
-        inputs: [
-          this.inventory.items[0]?.type || 'stardust',
-          this.inventory.items[1]?.type || 'cosmicShard'
-        ],
+        inputs: [this.inventory.items[0]?.type || 'stardust', this.inventory.items[1]?.type || 'cosmicShard'],
         output: {
           type: action.parameters.structure?.type + 'Essence' || 'celestialEssence',
           color: action.parameters.color || '#ffffff',
@@ -804,6 +834,11 @@ interface Response {
         star.style.animation = 'twinkle 3s infinite';
       }
     });
+    if (Math.random() < 0.001) {
+      const x = Math.random() * window.innerWidth;
+      const y = Math.random() * window.innerHeight;
+      this.spawnCollectible(x, y);
+    }
     requestAnimationFrame(() => this.visualizeAudio());
   }
   spawnCollectible(x, y) {
@@ -812,6 +847,7 @@ interface Response {
     collectible.setAttribute("cy", y);
     collectible.setAttribute("r", 10);
     collectible.setAttribute("fill", "yellow");
+    collectible.classList.add('collectible');
     this.canvas.appendChild(collectible);
     this.collectibles.push(collectible);
   }
@@ -819,20 +855,28 @@ interface Response {
     if (!this.collectibles.length) return;
     const target = this.collectibles[0];
     const rect = target.getBoundingClientRect();
+    this.npc.classList.add('npc-collecting');
+    const trail = document.createElement('div');
+    trail.className = 'npc-trail';
+    trail.style.left = this.npc.getAttribute("cx") + 'px';
+    trail.style.top = this.npc.getAttribute("cy") + 'px';
+    document.body.appendChild(trail);
     this.npc.setAttribute("cx", rect.x + rect.width / 2);
     this.npc.setAttribute("cy", rect.y + rect.height / 2);
-    target.remove();
-    this.collectibles.shift();
-
-    const baseItems = JSON.parse(localStorage.getItem('baseCollectibles'));
-    if (baseItems && baseItems.length) {
-      const randomItem = baseItems[Math.floor(Math.random() * baseItems.length)];
-      this.inventory.addItem(randomItem);
-      
-      if (Math.random() < 0.3 && this.inventory.items.length >= 2) {
-        this.crafting.show();
+    setTimeout(() => {
+      this.npc.classList.remove('npc-collecting');
+      target.remove();
+      this.collectibles.shift();
+      trail.remove();
+      const baseItems = JSON.parse(localStorage.getItem('baseCollectibles'));
+      if (baseItems && baseItems.length) {
+        const randomItem = baseItems[Math.floor(Math.random() * baseItems.length)];
+        this.inventory.addItem(randomItem);
+        if (Math.random() < 0.3 && this.inventory.items.length >= 2) {
+          this.crafting.show();
+        }
       }
-    }
+    }, 500);
   }
   orbitNearestStructure() {
     const structure = this.findNearestStructure();
@@ -856,7 +900,6 @@ interface Response {
     }
   }
 }
-
 class NPCInventory {
   constructor() {
     this.items = [];
@@ -864,7 +907,6 @@ class NPCInventory {
     this.element = document.getElementById('inventory-items');
     this.updateDisplay();
   }
-
   addItem(item) {
     if (this.items.length < this.maxSize) {
       this.items.push(item);
@@ -873,7 +915,6 @@ class NPCInventory {
     }
     return false;
   }
-
   removeItem(index) {
     if (index >= 0 && index < this.items.length) {
       const removed = this.items.splice(index, 1)[0];
@@ -882,7 +923,6 @@ class NPCInventory {
     }
     return null;
   }
-
   updateDisplay() {
     if (!this.element) return;
     this.element.innerHTML = this.items.map((item, i) => `
@@ -893,48 +933,40 @@ class NPCInventory {
     `).join('');
   }
 }
-
 class NPCCrafting {
   constructor(inventory) {
     this.inventory = inventory;
-    this.recipes = [
-      {
-        inputs: ['stardust', 'stardust'],
-        output: {
-          type: 'starEssence',
-          color: '#88ffff',
-          value: 25
-        }
-      },
-      {
-        inputs: ['cosmicShard', 'voidEssence'],
-        output: {
-          type: 'spaceTime',
-          color: '#ff88ff',
-          value: 75
-        }
+    this.recipes = [{
+      inputs: ['stardust', 'stardust'],
+      output: {
+        type: 'starEssence',
+        color: '#88ffff',
+        value: 25
       }
-    ];
+    }, {
+      inputs: ['cosmicShard', 'voidEssence'],
+      output: {
+        type: 'spaceTime',
+        color: '#ff88ff',
+        value: 75
+      }
+    }];
     this.element = document.getElementById('npc-crafting');
     this.gridElement = document.getElementById('crafting-grid');
     this.craftBtn = document.getElementById('craft-btn');
     this.setupEvents();
   }
-
   setupEvents() {
     if (this.craftBtn) {
       this.craftBtn.addEventListener('click', () => this.tryCraft());
     }
   }
-
   show() {
     this.element?.classList.add('active');
   }
-
   hide() {
     this.element?.classList.remove('active');
   }
-
   tryCraft() {
     const availableTypes = this.inventory.items.map(item => item.type);
     for (const recipe of this.recipes) {
@@ -944,13 +976,11 @@ class NPCCrafting {
       }
     }
   }
-
   canCraft(recipe, availableTypes) {
     const itemCounts = {};
     availableTypes.forEach(type => {
       itemCounts[type] = (itemCounts[type] || 0) + 1;
     });
-
     return recipe.inputs.every(input => {
       if (itemCounts[input] > 0) {
         itemCounts[input]--;
@@ -959,7 +989,6 @@ class NPCCrafting {
       return false;
     });
   }
-
   craft(recipe) {
     recipe.inputs.forEach(input => {
       const index = this.inventory.items.findIndex(item => item.type === input);
@@ -967,12 +996,10 @@ class NPCCrafting {
         this.inventory.removeItem(index);
       }
     });
-
     this.inventory.addItem(recipe.output);
     this.hide();
   }
 }
-
 const game = new Game();</script>
 <script defer src="https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516" integrity="sha512-8DS7rgIrAmghBFwoOTujcf6D9rXvH8xm8JQ1Ja01h9QX8EzXldiszufYa4IFfKdLUKTTrnSFXLDkUEOTrZQ8Qg==" data-cf-beacon='{"version":"2024.11.0","token":"4c6229722a6346bc8eb5cb0e5eae5d41","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
 </body></html>
