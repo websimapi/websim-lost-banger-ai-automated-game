@@ -41,8 +41,9 @@ export class Chunk {
       this.stars.push(star);
     }
 
-    // Generate collectibles
-    for (let i = 0; i < 5; i++) {
+    // Generate collectibles for the chunk
+    const collectibleCount = Math.floor(Math.random() * 5) + 3;
+    for (let i = 0; i < collectibleCount; i++) {
       const angle = Math.random() * Math.PI * 2;
       const distance = Math.random() * (this.radius - 50);
       const x = 500 + Math.cos(angle) * distance;
@@ -56,11 +57,14 @@ export class Chunk {
       collectible.classList.add('collectible');
       this.element.appendChild(collectible);
       
+      // Store absolute world coordinates
       this.collectibles.push({
         element: collectible,
         x: x + this.x * 1000,
         y: y + this.y * 1000,
-        collected: false
+        collected: false,
+        type: 'stardust',
+        value: Math.floor(Math.random() * 20) + 10
       });
     }
 

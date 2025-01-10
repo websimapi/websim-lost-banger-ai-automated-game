@@ -490,33 +490,6 @@ interface Response {
     requestAnimationFrame(() => this.gameLoop());
   }
 
-  checkCollisions() {
-    if (!this.npc) return;
-    const npcX = parseFloat(this.npc.getAttribute("cx"));
-    const npcY = parseFloat(this.npc.getAttribute("cy"));
-    const pickupDistance = 30;
-    this.collectibles.forEach(collectible => {
-      if (!collectible.collected) {
-        const dx = npcX - collectible.x;
-        const dy = npcY - collectible.y;
-        const distance = Math.hypot(dx, dy);
-        if (distance < pickupDistance) {
-          collectible.collected = true;
-          collectible.element.remove();
-          this.collectibles.splice(this.collectibles.indexOf(collectible), 1);
-          const baseItems = JSON.parse(localStorage.getItem('baseCollectibles'));
-          if (baseItems && baseItems.length) {
-            const randomItem = baseItems[Math.floor(Math.random() * baseItems.length)];
-            this.inventory.addItem(randomItem);
-            this.logAction(`Collected ${randomItem.type}`);
-            this.crafting.checkAndCraft();
-            this.npc.classList.remove('npc-collecting');
-          }
-        }
-      }
-    });
-  }
-
   spawnCollectible(x, y) {
     const collectible = document.createElementNS("http://www.w3.org/2000/svg", "circle");
     collectible.setAttribute("cx", x);
@@ -525,12 +498,53 @@ interface Response {
     collectible.setAttribute("fill", "yellow");
     collectible.classList.add('collectible');
     this.canvas.appendChild(collectible);
+    
+    // Store the absolute world position
     this.collectibles.push({
       element: collectible,
       x: x,
       y: y,
-      collected: false
+      collected: false,
+      type: 'stardust',
+      value: Math.floor(Math.random() * 20) + 10
     });
+  }
+
+  checkCollisions() {
+    if (!this.npc) return;
+    
+    const npcX = parseFloat(this.npc.getAttribute("cx"));
+    const npcY = parseFloat(this.npc.getAttribute("cy"));
+    const pickupDistance = 30;
+
+    // Check each collectible
+    for (let i = this.collectibles.length - 1; i >= 0; i--) {
+      const collectible = this.collectibles[i];
+      if (!collectible.collected) {
+        const dx = npcX - collectible.x;
+        const dy = npcY - collectible.y;
+        const distance = Math.hypot(dx, dy);
+        
+        if (distance < pickupDistance) {
+          collectible.collected = true;
+          collectible.element.remove();
+          
+          // Add to inventory
+          const item = {
+            type: collectible.type,
+            color: '#ffff00',
+            value: collectible.value
+          };
+          
+          this.inventory.addItem(item);
+          this.logAction(`Collected ${item.type} (${item.value})`);
+          this.crafting.checkAndCraft();
+          
+          // Remove from collectibles array
+          this.collectibles.splice(i, 1);
+        }
+      }
+    }
   }
 
   autonomousMove() {
@@ -539,38 +553,27 @@ interface Response {
     const now = Date.now();
     const timeSinceLastMove = now - this.lastAutonomousMove;
 
+    // First priority: Check for nearby collectibles
+    const nearest = this.findNearestCollectible();
+    if (nearest && !nearest.collected) {
+      this.moveTowards(nearest.x, nearest.y);
+      this.npc.classList.add('npc-collecting');
+      this.lastAutonomousMove = now;
+      return;
+    } else {
+      this.npc.classList.remove('npc-collecting');
+    }
+
+    // If idle for too long, start wandering
     if (timeSinceLastMove > this.idleTimeout) {
       this.wander();
       return;
     }
 
-    const nearest = this.findNearestCollectible();
-    if (nearest && !nearest.collected) {
-      this.moveTowards(nearest.x, nearest.y);
-      this.lastAutonomousMove = now;
-      return;
-    }
-
-    if (Math.random() < 0.3 || timeSinceLastMove > 5000) {
+    // Occasionally wander even when not idle
+    if (Math.random() < 0.1 || timeSinceLastMove > 5000) {
       this.wander();
-      return;
     }
-  }
-
-  wander() {
-    if (!this.npc) return;
-    
-    const currentX = parseFloat(this.npc.getAttribute("cx"));
-    const currentY = parseFloat(this.npc.getAttribute("cy"));
-    
-    const angle = Math.random() * Math.PI * 2;
-    const distance = Math.random() * 300 + 200;
-    
-    const targetX = currentX + Math.cos(angle) * distance;
-    const targetY = currentY + Math.sin(angle) * distance;
-    
-    this.moveTowards(targetX, targetY);
-    this.lastAutonomousMove = Date.now();
   }
 
   startAutonomousBehavior() {
@@ -629,29 +632,54 @@ interface Response {
 
   visualizeAudio() {
     const stars = this.canvas.querySelectorAll('.star');
-    this.audioAnalyser.getByteFrequencyData(this.audioData);
-    stars.forEach((star, i) => {
-      const audioIndex = i % this.audioData.length;
-      const audioValue = this.audioData[audioIndex] / 255;
-      if (audioValue > 0.8) {
-        star.style.animation = 'starAudioPulse 0.5s infinite';
-        if (Math.random() < 0.001) {
-          star.classList.add('star-rainbow');
-          setTimeout(() => {
-            const cx = parseFloat(star.getAttribute("cx"));
-            const cy = parseFloat(star.getAttribute("cy"));
-            this.spawnCollectible(cx, cy);
-            star.classList.remove('star-rainbow');
-          }, 2000);
+    if (this.audioAnalyser) {
+      this.audioAnalyser.getByteFrequencyData(this.audioData);
+      stars.forEach((star, i) => {
+        const audioIndex = i % this.audioData.length;
+        const audioValue = this.audioData[audioIndex] / 255;
+        if (audioValue > 0.8) {
+          star.style.animation = 'starAudioPulse 0.5s infinite';
+          if (Math.random() < 0.001) {
+            star.classList.add('star-rainbow');
+            setTimeout(() => {
+              const cx = parseFloat(star.getAttribute("cx"));
+              const cy = parseFloat(star.getAttribute("cy"));
+              const worldX = cx + (this.currentChunkX || 0) * this.chunkSize;
+              const worldY = cy + (this.currentChunkY || 0) * this.chunkSize;
+              this.spawnCollectible(worldX, worldY);
+              star.classList.remove('star-rainbow');
+            }, 2000);
+          }
+        } else {
+          star.style.animation = 'twinkle 3s infinite';
         }
-      } else {
-        star.style.animation = 'twinkle 3s infinite';
-      }
-    });
+      });
+    }
+
+    // Occasionally spawn new collectibles in visible area
     if (Math.random() < 0.001) {
-      const x = Math.random() * 10000 - 5000;
-      const y = Math.random() * 10000 - 5000;
+      const npcX = parseFloat(this.npc?.getAttribute("cx") || 0);
+      const npcY = parseFloat(this.npc?.getAttribute("cy") || 0);
+      const spread = 500;
+      const x = npcX + (Math.random() - 0.5) * spread;
+      const y = npcY + (Math.random() - 0.5) * spread;
       this.spawnCollectible(x, y);
     }
+  }
+
+  wander() {
+    if (!this.npc) return;
+    
+    const currentX = parseFloat(this.npc.getAttribute("cx"));
+    const currentY = parseFloat(this.npc.getAttribute("cy"));
+    
+    const angle = Math.random() * Math.PI * 2;
+    const distance = Math.random() * 300 + 200;
+    
+    const targetX = currentX + Math.cos(angle) * distance;
+    const targetY = currentY + Math.sin(angle) * distance;
+    
+    this.moveTowards(targetX, targetY);
+    this.lastAutonomousMove = Date.now();
   }
 }
