@@ -10,9 +10,10 @@
   }
   
   #gameCanvas {
+    position: relative;
     width: 100vw;
     height: 100vh;
-    transition: all 1.2s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: transform 0.2s linear;
   }
   
   #skip-btn {
@@ -339,10 +340,11 @@
 };
 class Chunk {
   constructor(x, y) {
-    this.x = x;
+    this.x = x; 
     this.y = y;
     this.element = document.createElementNS("http://www.w3.org/2000/svg", "g");
     this.element.classList.add('chunk');
+    // Transform based on chunk coordinates
     this.element.setAttribute('transform', `translate(${x * 1000}, ${y * 1000})`);
     this.generated = false;
   }
@@ -438,9 +440,9 @@ class Game {
     this.started = false;
     this.actionHistory = [];
     this.autonomousInterval = null;
-    this.chunks = new Map();
-    this.chunkSize = 1000;
-    this.loadedChunks = new Set();
+    this.chunkSize = 1000; // Size of each chunk
+    this.viewDistance = 2; // How many chunks to load in each direction
+    this.loadedChunks = new Map(); // Track loaded chunks
     this.lastChunkUpdate = 0;
     this.lastAutonomousMove = Date.now();
     this.audioContext = null;
@@ -500,26 +502,38 @@ class Game {
   updateVisibleChunks() {
     const npcX = parseFloat(this.npc.getAttribute("cx"));
     const npcY = parseFloat(this.npc.getAttribute("cy"));
+    
+    // Calculate current chunk coordinates
     const currentChunkX = Math.floor(npcX / this.chunkSize);
     const currentChunkY = Math.floor(npcY / this.chunkSize);
-    for (let dx = -2; dx <= 2; dx++) {
-      for (let dy = -2; dy <= 2; dy++) {
+
+    // Load new chunks in view distance
+    for (let dx = -this.viewDistance; dx <= this.viewDistance; dx++) {
+      for (let dy = -this.viewDistance; dy <= this.viewDistance; dy++) {
         const chunkX = currentChunkX + dx;
         const chunkY = currentChunkY + dy;
         const key = `${chunkX},${chunkY}`;
-        if (!this.chunks.has(key)) {
+        
+        if (!this.loadedChunks.has(key)) {
           const chunk = new Chunk(chunkX, chunkY);
-          this.chunks.set(key, chunk);
+          this.loadedChunks.set(key, chunk);
           this.canvas.appendChild(chunk.element);
           chunk.generate();
         }
       }
     }
-    for (const [key, chunk] of this.chunks) {
+
+    // Remove chunks outside view distance
+    for (const [key, chunk] of this.loadedChunks.entries()) {
       const [x, y] = key.split(',').map(Number);
-      if (Math.abs(x - currentChunkX) > 3 || Math.abs(y - currentChunkY) > 3) {
+      const distance = Math.max(
+        Math.abs(x - currentChunkX),
+        Math.abs(y - currentChunkY)
+      );
+      
+      if (distance > this.viewDistance + 1) {
         chunk.element.remove();
-        this.chunks.delete(key);
+        this.loadedChunks.delete(key);
       }
     }
   }
@@ -786,13 +800,10 @@ interface Response {
       const x = parseFloat(this.npc.getAttribute("cx"));
       const y = parseFloat(this.npc.getAttribute("cy"));
       this.canvas.style.transform = `translate(${window.innerWidth / 2 - x}px, ${window.innerHeight / 2 - y}px)`;
-    }, 100);
+    }, 16); 
     setInterval(() => {
-      if (Date.now() - this.lastChunkUpdate > 1000) {
-        this.updateVisibleChunks();
-        this.lastChunkUpdate = Date.now();
-      }
-    }, 1000);
+      this.updateVisibleChunks();
+    }, 100); 
   }
   startCountdown(seconds) {
     if (!this.timerValue) return;
@@ -832,7 +843,7 @@ interface Response {
     }, 2000);
   }
   autonomousMove() {
-    if (!this.npc) return; // Guard against undefined npc
+    if (!this.npc) return; 
 
     const movements = [{
       fn: this.wander.bind(this),
@@ -867,7 +878,6 @@ interface Response {
       weight: 1,
       cooldown: 10000
     }];
-    // Only proceed if NPC exists
     if (this.npc) {
       const totalWeight = movements.reduce((sum, m) => sum + m.weight, 0);
       let random = Math.random() * totalWeight;
@@ -884,31 +894,36 @@ interface Response {
   wander() {
     const angle = Math.random() * Math.PI * 2;
     const distance = Math.random() * 300 + 200;
+    
     const currentX = parseFloat(this.npc.getAttribute("cx"));
     const currentY = parseFloat(this.npc.getAttribute("cy"));
+    
     const newX = currentX + Math.cos(angle) * distance;
     const newY = currentY + Math.sin(angle) * distance;
-    this.npc.classList.add('npc-autonomous');
+    
+    this.npc.style.transition = "all 2.5s cubic-bezier(0.4, 0, 0.2, 1)";
     this.npc.setAttribute("cx", newX);
     this.npc.setAttribute("cy", newY);
-    setTimeout(() => {
-      this.npc.classList.remove('npc-autonomous');
-    }, 2500);
   }
   explore() {
-    // Only explore if there are structures
     if (this.structures.length === 0) {
       this.wander();
       return;
     }
+
     const target = this.structures[Math.floor(Math.random() * this.structures.length)];
-    if (target) {
-      const rect = target.getBoundingClientRect();
-      this.npc.setAttribute("cx", rect.x + rect.width / 2);
-      this.npc.setAttribute("cy", rect.y + rect.height / 2);
-    } else {
+    if (!target) {
       this.wander();
+      return;
     }
+
+    const targetBounds = target.getBoundingClientRect();
+    const newX = targetBounds.x + targetBounds.width/2;
+    const newY = targetBounds.y + targetBounds.height/2;
+
+    this.npc.style.transition = "all 2.5s cubic-bezier(0.4, 0, 0.2, 1)";
+    this.npc.setAttribute("cx", newX);
+    this.npc.setAttribute("cy", newY);
   }
   interactWithStructure() {
     const nearestStructure = this.findNearestStructure();
