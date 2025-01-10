@@ -2,7 +2,6 @@ import { GameState } from './gameState.js';
 import { Chunk } from './chunk.js';
 import { NPCInventory } from './inventory.js';
 import { NPCCrafting } from './crafting.js';
-import { NPCAI } from './npcAI.js';
 
 export class Game {
   constructor() {
@@ -27,10 +26,8 @@ export class Game {
     this.chunkSize = 1000;
     this.visibleChunkRadius = 3;
     this.chunks = new Map();
-    this.currentPosition = { x: 0, y: 0 };
     this.targetPosition = { x: 0, y: 0 };
-    this.moveSpeed = 0.3;
-    this.lastFrameTime = performance.now();
+    this.moveSpeed = 0.3; 
     this.collectibles = [];
     this.inventory = new NPCInventory();
     this.crafting = new NPCCrafting(this.inventory, this);
@@ -41,9 +38,8 @@ export class Game {
     this.lastChunkUpdateX = null;
     this.lastChunkUpdateY = null;
     this.moveAnimation = null;
-    this.idleTimeout = 15000;
-    this.ai = null;
-
+    this.idleTimeout = 15000; 
+    this.actionTimeout = null;
     if (!localStorage.getItem('baseCollectibles')) {
       localStorage.setItem('baseCollectibles', JSON.stringify([{
         type: 'stardust',
@@ -62,21 +58,11 @@ export class Game {
     if (!localStorage.getItem('godIdeas')) {
       localStorage.setItem('godIdeas', JSON.stringify([]));
     }
-    if (this.skipBtn) {
-      this.skipBtn.addEventListener('click', () => this.skipCooldown());
-    }
+    this.canvas.style.visibility = 'hidden';
+    this.initializeUI();
     if (this.startBtn) {
       this.startBtn.addEventListener('click', () => this.startGame());
     }
-    this.skipBtn?.classList.add('hidden');
-    this.stateIndicator?.classList.add('hidden');
-    this.actionLog?.classList.add('hidden');
-    this.countdownTimer?.classList.add('hidden');
-    this.initialize();
-    requestAnimationFrame(() => {
-      this.updateCamera();
-      this.startAutonomousBehavior();
-    });
   }
 
   createNPC() {
@@ -166,46 +152,53 @@ export class Game {
       collect: 0,
       craft: 0,
       place: 0,
-      explore: 0,
       investigate: 0
     };
 
-    // Collection priority
+    // Evaluate collection priority
     const nearestCollectible = this.findNearestCollectible();
-    if (nearestCollectible && this.inventory.items.length < this.inventory.maxSize) {
+    if (nearestCollectible) {
       const distance = this.getDistanceToCollectible(nearestCollectible);
       priorities.collect = Math.max(0, 100 - distance / 10);
       
-      // Boost collection priority when inventory is low
+      // Higher priority when inventory is low
       if (this.inventory.items.length < 3) {
-        priorities.collect += 75;
+        priorities.collect += 50;
       }
     }
 
-    // Crafting priority increases with inventory fullness
+    // Evaluate crafting priority
     if (this.inventory.items.length >= 2) {
-      const canCraftSomething = this.crafting.recipes.some(recipe => this.crafting.canCraft(recipe));
-      if (canCraftSomething) {
-        priorities.craft = 40 + (this.inventory.items.length * 15);
+      const canCraft = this.crafting.recipes.some(recipe => 
+        this.crafting.canCraft(recipe)
+      );
+      if (canCraft) {
+        priorities.craft = 30 + (this.inventory.items.length * 10);
       }
     }
 
-    // Placing priority for special items
-    const hasCraftedItems = this.inventory.items.some(item => 
-      item.type.includes('Essence') || item.type.includes('Time'));
-    if (hasCraftedItems) {
-      priorities.place = 60 + (Math.random() * 20);
+    // Evaluate placing priority
+    if (this.inventory.items.some(item => 
+      item.type.includes('Essence') || item.type.includes('Time')
+    )) {
+      priorities.place = 40;
     }
 
-    // Investigation priority for structures
-    const hasUnexploredStructures = this.structures.some(s => !s.explored);
-    if (hasUnexploredStructures) {
-      priorities.investigate = 30 + (Math.random() * 30);
+    // Evaluate investigation priority
+    if (this.structures.some(s => !s.explored)) {
+      priorities.investigate = 20;
     }
 
-    // Exploration gets higher priority with idle time
-    const idleTime = Date.now() - this.lastAutonomousMove;
-    priorities.explore = Math.min(50, Math.floor(idleTime / 300));
+    // Adjust priorities based on recent actions
+    const lastAction = this.actionHistory[0];
+    if (lastAction) {
+      const actionType = lastAction.toLowerCase();
+      Object.keys(priorities).forEach(key => {
+        if (actionType.includes(key)) {
+          priorities[key] *= 0.5; // Reduce priority of recent actions
+        }
+      });
+    }
 
     return priorities;
   }
@@ -324,7 +317,6 @@ export class Game {
     const viewBoxWidth = this.viewportWidth;
     const viewBoxHeight = this.viewportHeight;
     
-    // Smooth camera follow
     const viewBox = `${x - viewBoxWidth/2} ${y - viewBoxHeight/2} ${viewBoxWidth} ${viewBoxHeight}`;
     this.canvas.setAttribute('viewBox', viewBox);
 
@@ -347,75 +339,76 @@ export class Game {
     const offsetX = (Math.random() - 0.5) * 20;
     const offsetY = (Math.random() - 0.5) * 20;
     
-    this.currentPosition = { x: startX, y: startY };
-    this.targetPosition = { 
-      x: targetX + offsetX, 
-      y: targetY + offsetY 
-    };
+    const finalTargetX = targetX + offsetX;
+    const finalTargetY = targetY + offsetY;
 
     // Don't move if already very close to target
-    if (Math.abs(this.targetPosition.x - startX) < 5 && 
-        Math.abs(this.targetPosition.y - startY) < 5) {
+    if (Math.abs(finalTargetX - startX) < 5 && Math.abs(finalTargetY - startY) < 5) {
       this.isMoving = false;
       this.npc.classList.remove('npc-collecting');
-      setTimeout(() => this.ai?.think(), 100);
+      setTimeout(() => this.checkNextAction(), 100);
       return;
     }
 
-    this.moveAnimation = requestAnimationFrame(this.animateMovement.bind(this));
+    const startTime = performance.now();
+    
+    if (this.moveAnimation) {
+      cancelAnimationFrame(this.moveAnimation);
+    }
+
+    // Create movement trail
+    const createTrail = () => {
+      const trail = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      trail.setAttribute("cx", this.npc.getAttribute("cx"));
+      trail.setAttribute("cy", this.npc.getAttribute("cy"));
+      trail.setAttribute("r", "3");
+      trail.classList.add('npc-trail');
+      this.canvas.appendChild(trail);
+      setTimeout(() => trail.remove(), 1000);
+    };
+
+    const animate = (currentTime) => {
+      const elapsed = currentTime - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      
+      // Smooth easing function
+      const easeProgress = progress < 0.5 
+        ? 2 * progress * progress 
+        : 1 - Math.pow(-2 * progress + 2, 2) / 2;
+      
+      const currentX = startX + (finalTargetX - startX) * easeProgress;
+      const currentY = startY + (finalTargetY - startY) * easeProgress;
+      
+      this.npc.setAttribute("cx", currentX);
+      this.npc.setAttribute("cy", currentY);
+      
+      // Create trail effect
+      if (Math.random() < 0.2) {
+        createTrail();
+      }
+      
+      this.updateCamera();
+      
+      if (progress < 1) {
+        this.moveAnimation = requestAnimationFrame(animate);
+      } else {
+        this.isMoving = false;
+        this.moveAnimation = null;
+        this.npc.classList.remove('npc-collecting');
+        setTimeout(() => this.checkNextAction(), 100);
+      }
+    };
+    
+    this.moveAnimation = requestAnimationFrame(animate);
     this.lastAutonomousMove = Date.now();
-  }
-
-  animateMovement(timestamp) {
-    const deltaTime = timestamp - (this.lastFrameTime || timestamp);
-    this.lastFrameTime = timestamp;
-
-    const dx = this.targetPosition.x - this.currentPosition.x;
-    const dy = this.targetPosition.y - this.currentPosition.y;
-    const distance = Math.hypot(dx, dy);
-
-    if (distance < 1) {
-      this.isMoving = false;
-      this.moveAnimation = null;
-      this.npc.classList.remove('npc-collecting');
-      setTimeout(() => this.ai?.think(), 100);
-      return;
-    }
-
-    const speed = this.moveSpeed * deltaTime;
-    const moveX = (dx / distance) * speed;
-    const moveY = (dy / distance) * speed;
-
-    this.currentPosition.x += moveX;
-    this.currentPosition.y += moveY;
-
-    this.npc.setAttribute("cx", this.currentPosition.x);
-    this.npc.setAttribute("cy", this.currentPosition.y);
-
-    // Create trail effect
-    if (Math.random() < 0.2) {
-      this.createTrail(this.currentPosition.x, this.currentPosition.y);
-    }
-
-    this.updateCamera();
-    this.moveAnimation = requestAnimationFrame(this.animateMovement.bind(this));
-  }
-
-  createTrail(x, y) {
-    const trail = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-    trail.setAttribute("cx", x);
-    trail.setAttribute("cy", y);
-    trail.setAttribute("r", "2");
-    trail.classList.add('npc-trail');
-    this.canvas.appendChild(trail);
-    setTimeout(() => trail.remove(), 1000);
   }
 
   moveTowardsCollectible(collectible) {
     if (!collectible || collectible.collected) return;
     
+    const duration = 2000;
     this.npc.classList.add('npc-collecting');
-    this.moveTowards(collectible.x, collectible.y);
+    this.moveTowards(collectible.x, collectible.y, duration);
   }
 
   autonomousMove() {
@@ -544,25 +537,262 @@ export class Game {
 
   startGame() {
     if (this.started) return;
+    
     this.started = true;
+    this.canvas.style.visibility = 'visible';
     
-    // Initialize NPC AI
-    this.ai = new NPCAI(this.npc, this);
-    
-    // Rest of startGame code...
+    // Show UI elements
     this.startBtn?.classList.add('hidden');
     this.skipBtn?.classList.remove('hidden');
     this.stateIndicator?.classList.remove('hidden');
     this.actionLog?.classList.remove('hidden');
     this.countdownTimer?.classList.remove('hidden');
-    this.audio?.play().catch(e => console.log('Audio playback failed:', e));
-    this.initAudio();
-    this.startGameLoop();
-    this.startCountdown(180);
+    
+    // Initialize game systems
+    this.initialize();
     this.inventory.show();
     
-    // Ensure initial camera focus
-    requestAnimationFrame(() => this.updateCamera());
+    // Start audio if available
+    this.audio?.play().catch(e => console.log('Audio playback failed:', e));
+    this.initAudio();
+    
+    // Start game systems
+    this.startGameLoop();
+    this.startCountdown(180);
+    this.startAutonomousBehavior();
+
+    // Initial NPC position and camera focus
+    if (this.npc) {
+      this.npc.setAttribute("cx", "0");
+      this.npc.setAttribute("cy", "0");
+      this.updateCamera();
+    }
+
+    // Ensure NPC starts taking actions immediately
+    this.scheduleNextAction();
+  }
+
+  scheduleNextAction() {
+    if (!this.started) return;
+    
+    clearTimeout(this.actionTimeout);
+    
+    // Schedule next action in 5 seconds
+    this.actionTimeout = setTimeout(() => {
+      if (!this.cooldown && !this.isCrafting && !this.isMoving) {
+        this.determineAndExecuteAction();
+      }
+      this.scheduleNextAction();
+    }, 5000);
+  }
+
+  determineAndExecuteAction() {
+    const priorities = this.evaluateActionPriorities();
+    const highestPriority = Math.max(...Object.values(priorities));
+    
+    if (highestPriority === 0) {
+      this.exploreNewChunks();
+      return;
+    }
+
+    // Execute action based on highest priority
+    const actions = Object.entries(priorities)
+      .filter(([_, value]) => value === highestPriority)
+      .map(([action]) => action);
+    
+    const chosenAction = actions[Math.floor(Math.random() * actions.length)];
+    
+    switch (chosenAction) {
+      case 'collect':
+        const nearest = this.findNearestCollectible();
+        if (nearest) {
+          this.moveTowardsCollectible(nearest);
+          this.logAction('Moving to collect stardust');
+        }
+        break;
+        
+      case 'craft':
+        if (!this.crafting.isCrafting) {
+          this.crafting.checkAndCraft();
+          this.logAction('Starting crafting process');
+        }
+        break;
+        
+      case 'place':
+        this.placeCreation();
+        this.logAction('Placing creation in space');
+        break;
+        
+      case 'investigate':
+        this.exploreStructures();
+        this.logAction('Investigating cosmic structure');
+        break;
+        
+      default:
+        this.exploreNewChunks();
+        this.logAction('Exploring new areas');
+    }
+  }
+
+  initializeUI() {
+    // Hide all UI elements initially
+    this.skipBtn?.classList.add('hidden');
+    this.stateIndicator?.classList.add('hidden');
+    this.actionLog?.classList.add('hidden');
+    this.countdownTimer?.classList.add('hidden');
+    
+    // Ensure inventory is hidden
+    const inventory = document.getElementById('npc-inventory');
+    if (inventory) inventory.classList.add('hidden');
+    
+    // Clear any existing content
+    this.canvas.innerHTML = '';
+  }
+
+  startGameLoop() {
+    this.executeState();
+    setInterval(() => {
+      if (!this.cooldown) {
+        this.lastAutonomousMove = Date.now() + 5000;
+        this.cooldown = true;
+        this.executeState();
+        setTimeout(() => {
+          this.cooldown = false;
+        }, 180000);
+      }
+    }, 1000);
+    setInterval(() => {
+      if (Date.now() - this.lastChunkUpdate > 1000) {
+        this.updateVisibleChunks();
+        this.lastChunkUpdate = Date.now();
+      }
+    }, 1000);
+    requestAnimationFrame(() => this.gameLoop());
+  }
+
+  gameLoop() {
+    this.checkCollisions();
+    this.visualizeAudio();
+    requestAnimationFrame(() => this.gameLoop());
+  }
+
+  startCountdown(seconds) {
+    if (!this.timerValue) return;
+    if (this.countdownInterval) {
+      clearInterval(this.countdownInterval);
+    }
+    const updateTimer = () => {
+      const minutes = Math.floor(seconds / 60);
+      const remainingSeconds = seconds % 60;
+      this.timerValue.textContent = `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+    };
+    updateTimer();
+    this.countdownInterval = setInterval(() => {
+      seconds--;
+      updateTimer();
+      if (seconds <= 0) {
+        clearInterval(this.countdownInterval);
+        this.startCountdown(180);
+      }
+    }, 1000);
+  }
+
+  skipCooldown() {
+    if (this.cooldown) {
+      this.cooldown = false;
+      this.skipBtn.style.opacity = '0.5';
+      setTimeout(() => {
+        this.skipBtn.style.opacity = '1';
+      }, 1000);
+      this.startCountdown(180);
+    }
+  }
+
+  initAudio() {
+    this.audioContext = new AudioContext();
+    this.audioAnalyser = this.audioContext.createAnalyser();
+    const source = this.audioContext.createMediaElementSource(this.audio);
+    source.connect(this.audioAnalyser);
+    this.audioAnalyser.connect(this.audioContext.destination);
+    this.audioAnalyser.fftSize = 256;
+    this.audioData = new Uint8Array(this.audioAnalyser.frequencyBinCount);
+  }
+
+  visualizeAudio() {
+    const stars = this.canvas.querySelectorAll('.star');
+    if (this.audioAnalyser) {
+      this.audioAnalyser.getByteFrequencyData(this.audioData);
+      stars.forEach((star, i) => {
+        const audioIndex = i % this.audioData.length;
+        const audioValue = this.audioData[audioIndex] / 255;
+        if (audioValue > 0.8) {
+          star.style.animation = 'starAudioPulse 0.5s infinite';
+          if (Math.random() < 0.001) {
+            star.classList.add('star-rainbow');
+            setTimeout(() => {
+              const cx = parseFloat(star.getAttribute("cx"));
+              const cy = parseFloat(star.getAttribute("cy"));
+              const worldX = cx + (this.currentChunkX || 0) * this.chunkSize;
+              const worldY = cy + (this.currentChunkY || 0) * this.chunkSize;
+              this.spawnCollectible(worldX, worldY);
+              star.classList.remove('star-rainbow');
+            }, 2000);
+          }
+        } else {
+          star.style.animation = 'twinkle 3s infinite';
+        }
+      });
+    }
+
+    if (Math.random() < 0.001) {
+      const npcX = parseFloat(this.npc?.getAttribute("cx") || 0);
+      const npcY = parseFloat(this.npc?.getAttribute("cy") || 0);
+      const spread = 500;
+      const x = npcX + (Math.random() - 0.5) * spread;
+      const y = npcY + (Math.random() - 0.5) * spread;
+      this.spawnCollectible(x, y);
+    }
+  }
+
+  exploreNewChunks() {
+    if (!this.npc) return;
+    
+    const npcX = parseFloat(this.npc.getAttribute("cx"));
+    const npcY = parseFloat(this.npc.getAttribute("cy"));
+    
+    const directions = [
+      {x: 1000, y: 0},
+      {x: -1000, y: 0},
+      {x: 0, y: 1000},
+      {x: 0, y: -1000}
+    ];
+    
+    let bestDirection = null;
+    let leastExplored = Infinity;
+    
+    directions.forEach(dir => {
+      const checkX = Math.floor((npcX + dir.x) / this.chunkSize);
+      const checkY = Math.floor((npcY + dir.y) / this.chunkSize);
+      
+      let exploredCount = 0;
+      for (let i = -1; i <= 1; i++) {
+        for (let j = -1; j <= 1; j++) {
+          const key = `${checkX + i},${checkY + j}`;
+          if (this.chunks.has(key)) {
+            exploredCount++;
+          }
+        }
+      }
+      
+      if (exploredCount < leastExplored) {
+        leastExplored = exploredCount;
+        bestDirection = dir;
+      }
+    });
+    
+    if (bestDirection) {
+      this.moveTowards(npcX + bestDirection.x, npcY + bestDirection.y, 5000);
+    }
   }
 
   async getAIAction(state) {
@@ -794,151 +1024,5 @@ interface Response {
       document.body.classList.remove('ambient-active');
       document.body.style.animation = '';
     }, duration);
-  }
-
-  startGameLoop() {
-    this.executeState();
-    setInterval(() => {
-      if (!this.cooldown) {
-        this.lastAutonomousMove = Date.now() + 5000;
-        this.cooldown = true;
-        this.executeState();
-        setTimeout(() => {
-          this.cooldown = false;
-        }, 180000);
-      }
-    }, 1000);
-    setInterval(() => {
-      if (Date.now() - this.lastChunkUpdate > 1000) {
-        this.updateVisibleChunks();
-        this.lastChunkUpdate = Date.now();
-      }
-    }, 1000);
-    requestAnimationFrame(() => this.gameLoop());
-  }
-
-  gameLoop() {
-    this.checkCollisions();
-    this.visualizeAudio();
-    requestAnimationFrame(() => this.gameLoop());
-  }
-
-  startCountdown(seconds) {
-    if (!this.timerValue) return;
-    if (this.countdownInterval) {
-      clearInterval(this.countdownInterval);
-    }
-    const updateTimer = () => {
-      const minutes = Math.floor(seconds / 60);
-      const remainingSeconds = seconds % 60;
-      this.timerValue.textContent = `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
-    };
-    updateTimer();
-    this.countdownInterval = setInterval(() => {
-      seconds--;
-      updateTimer();
-      if (seconds <= 0) {
-        clearInterval(this.countdownInterval);
-        this.startCountdown(180);
-      }
-    }, 1000);
-  }
-
-  skipCooldown() {
-    if (this.cooldown) {
-      this.cooldown = false;
-      this.skipBtn.style.opacity = '0.5';
-      setTimeout(() => {
-        this.skipBtn.style.opacity = '1';
-      }, 1000);
-      this.startCountdown(180);
-    }
-  }
-
-  initAudio() {
-    this.audioContext = new AudioContext();
-    this.audioAnalyser = this.audioContext.createAnalyser();
-    const source = this.audioContext.createMediaElementSource(this.audio);
-    source.connect(this.audioAnalyser);
-    this.audioAnalyser.connect(this.audioContext.destination);
-    this.audioAnalyser.fftSize = 256;
-    this.audioData = new Uint8Array(this.audioAnalyser.frequencyBinCount);
-  }
-
-  visualizeAudio() {
-    const stars = this.canvas.querySelectorAll('.star');
-    if (this.audioAnalyser) {
-      this.audioAnalyser.getByteFrequencyData(this.audioData);
-      stars.forEach((star, i) => {
-        const audioIndex = i % this.audioData.length;
-        const audioValue = this.audioData[audioIndex] / 255;
-        if (audioValue > 0.8) {
-          star.style.animation = 'starAudioPulse 0.5s infinite';
-          if (Math.random() < 0.001) {
-            star.classList.add('star-rainbow');
-            setTimeout(() => {
-              const cx = parseFloat(star.getAttribute("cx"));
-              const cy = parseFloat(star.getAttribute("cy"));
-              const worldX = cx + (this.currentChunkX || 0) * this.chunkSize;
-              const worldY = cy + (this.currentChunkY || 0) * this.chunkSize;
-              this.spawnCollectible(worldX, worldY);
-              star.classList.remove('star-rainbow');
-            }, 2000);
-          }
-        } else {
-          star.style.animation = 'twinkle 3s infinite';
-        }
-      });
-    }
-
-    if (Math.random() < 0.001) {
-      const npcX = parseFloat(this.npc?.getAttribute("cx") || 0);
-      const npcY = parseFloat(this.npc?.getAttribute("cy") || 0);
-      const spread = 500;
-      const x = npcX + (Math.random() - 0.5) * spread;
-      const y = npcY + (Math.random() - 0.5) * spread;
-      this.spawnCollectible(x, y);
-    }
-  }
-
-  exploreNewChunks() {
-    if (!this.npc) return;
-    
-    const npcX = parseFloat(this.npc.getAttribute("cx"));
-    const npcY = parseFloat(this.npc.getAttribute("cy"));
-    
-    const directions = [
-      {x: 1000, y: 0},
-      {x: -1000, y: 0},
-      {x: 0, y: 1000},
-      {x: 0, y: -1000}
-    ];
-    
-    let bestDirection = null;
-    let leastExplored = Infinity;
-    
-    directions.forEach(dir => {
-      const checkX = Math.floor((npcX + dir.x) / this.chunkSize);
-      const checkY = Math.floor((npcY + dir.y) / this.chunkSize);
-      
-      let exploredCount = 0;
-      for (let i = -1; i <= 1; i++) {
-        for (let j = -1; j <= 1; j++) {
-          const key = `${checkX + i},${checkY + j}`;
-          if (this.chunks.has(key)) {
-            exploredCount++;
-          }
-        }
-      }
-      
-      if (exploredCount < leastExplored) {
-        leastExplored = exploredCount;
-        bestDirection = dir;
-      }
-    });
-    
-    if (bestDirection) {
-      this.moveTowards(npcX + bestDirection.x, npcY + bestDirection.y, 5000);
-    }
   }
 }
