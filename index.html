@@ -391,7 +391,7 @@ class Game {
     this.collectibles = [];
     this.inventory = new NPCInventory();
     this.crafting = new NPCCrafting(this.inventory);
-    this.initialize();
+    
     if (!localStorage.getItem('baseCollectibles')) {
       localStorage.setItem('baseCollectibles', JSON.stringify([{
         type: 'stardust',
@@ -399,7 +399,7 @@ class Game {
         value: 10
       }, {
         type: 'cosmicShard',
-        color: '#ff00ff',
+        color: '#ff00ff', 
         value: 20
       }, {
         type: 'voidEssence',
@@ -407,6 +407,19 @@ class Game {
         value: 30
       }]));
     }
+    
+    this.initialize();
+    if (this.skipBtn) {
+      this.skipBtn.addEventListener('click', () => this.skipCooldown());
+    }
+    if (this.startBtn) {
+      this.startBtn.addEventListener('click', () => this.startGame());
+    }
+    if (this.skipBtn) this.skipBtn.classList.add('hidden');
+    if (this.stateIndicator) this.stateIndicator.classList.add('hidden');
+    if (this.actionLog) this.actionLog.classList.add('hidden');
+    if (this.countdownTimer) this.countdownTimer.classList.add('hidden');
+    this.addBackgroundElements();
   }
   createNPC() {
     if (!this.canvas) return null;
@@ -426,17 +439,6 @@ class Game {
     this.actionLog.innerHTML = this.actionHistory.join('<br>');
   }
   initialize() {
-    if (this.skipBtn) {
-      this.skipBtn.addEventListener('click', () => this.skipCooldown());
-    }
-    if (this.startBtn) {
-      this.startBtn.addEventListener('click', () => this.startGame());
-    }
-    if (this.skipBtn) this.skipBtn.classList.add('hidden');
-    if (this.stateIndicator) this.stateIndicator.classList.add('hidden');
-    if (this.actionLog) this.actionLog.classList.add('hidden');
-    if (this.countdownTimer) this.countdownTimer.classList.add('hidden');
-    this.addBackgroundElements();
   }
   addBackgroundElements() {
     const createStar = () => {
@@ -741,16 +743,16 @@ interface Response {
   autonomousMove() {
     const movements = [{
       fn: this.wander.bind(this),
-      weight: 1
+      weight: 1  
     }, {
-      fn: this.explore.bind(this),
+      fn: this.explore.bind(this), 
       weight: 2
     }, {
       fn: this.interactWithStructure.bind(this),
       weight: 2
     }, {
       fn: this.seekCollectible.bind(this),
-      weight: 4
+      weight: 4  // Higher weight for collecting
     }, {
       fn: this.orbitNearestStructure.bind(this),
       weight: 2
@@ -765,8 +767,10 @@ interface Response {
       },
       weight: 1
     }];
+
     const totalWeight = movements.reduce((sum, m) => sum + m.weight, 0);
     let random = Math.random() * totalWeight;
+    
     for (let movement of movements) {
       random -= movement.weight;
       if (random <= 0) {
@@ -774,6 +778,7 @@ interface Response {
         break;
       }
     }
+
     this.lastAutonomousMove = Date.now();
   }
   wander() {
@@ -833,25 +838,32 @@ interface Response {
   }
   seekCollectible() {
     if (!this.collectibles.length) return;
+    
     const target = this.collectibles[0];
     const rect = target.getBoundingClientRect();
+    
     this.npc.classList.add('npc-collecting');
+    
     const trail = document.createElement('div');
     trail.className = 'npc-trail';
     trail.style.left = this.npc.getAttribute("cx") + 'px';
     trail.style.top = this.npc.getAttribute("cy") + 'px';
     document.body.appendChild(trail);
+
     this.npc.setAttribute("cx", rect.x + rect.width / 2);
     this.npc.setAttribute("cy", rect.y + rect.height / 2);
+
     setTimeout(() => {
       this.npc.classList.remove('npc-collecting');
       target.remove();
       this.collectibles.shift();
       trail.remove();
+
       const baseItems = JSON.parse(localStorage.getItem('baseCollectibles'));
       if (baseItems && baseItems.length) {
         const randomItem = baseItems[Math.floor(Math.random() * baseItems.length)];
         this.inventory.addItem(randomItem);
+        
         if (Math.random() < 0.3 && this.inventory.items.length >= 2) {
           this.crafting.show();
         }
