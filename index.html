@@ -448,6 +448,7 @@ class Game {
     this.collectibles = [];
     this.inventory = new NPCInventory();
     this.crafting = new NPCCrafting(this.inventory);
+    this.structures = [];
     if (!localStorage.getItem('baseCollectibles')) {
       localStorage.setItem('baseCollectibles', JSON.stringify([{
         type: 'stardust',
@@ -831,6 +832,8 @@ interface Response {
     }, 2000);
   }
   autonomousMove() {
+    if (!this.npc) return; // Guard against undefined npc
+
     const movements = [{
       fn: this.wander.bind(this),
       weight: 3,
@@ -864,14 +867,17 @@ interface Response {
       weight: 1,
       cooldown: 10000
     }];
-    const totalWeight = movements.reduce((sum, m) => sum + m.weight, 0);
-    let random = Math.random() * totalWeight;
-    for (let movement of movements) {
-      random -= movement.weight;
-      if (random <= 0) {
-        movement.fn();
-        this.lastAutonomousMove = Date.now() + movement.cooldown;
-        break;
+    // Only proceed if NPC exists
+    if (this.npc) {
+      const totalWeight = movements.reduce((sum, m) => sum + m.weight, 0);
+      let random = Math.random() * totalWeight;
+      for (let movement of movements) {
+        random -= movement.weight;
+        if (random <= 0) {
+          movement.fn();
+          this.lastAutonomousMove = Date.now() + movement.cooldown;
+          break;
+        }
       }
     }
   }
@@ -890,6 +896,11 @@ interface Response {
     }, 2500);
   }
   explore() {
+    // Only explore if there are structures
+    if (this.structures.length === 0) {
+      this.wander();
+      return;
+    }
     const target = this.structures[Math.floor(Math.random() * this.structures.length)];
     if (target) {
       const rect = target.getBoundingClientRect();
