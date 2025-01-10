@@ -288,10 +288,27 @@
     color: white;
     z-index: 200;
     display: none;
+    width: 300px;
   }
 
   .npc-crafting.active {
     display: block;
+  }
+
+  #craft-progress {
+    width: 100%;
+    background-color: rgba(255, 255, 255, 0.2);
+    border-radius: 5px;
+    overflow: hidden;
+    height: 20px;
+    margin-top: 10px;
+  }
+
+  #craft-bar {
+    width: 0%;
+    height: 100%;
+    background-color: gold;
+    transition: width 0.5s;
   }
 
   .crafting-grid {
@@ -326,8 +343,9 @@
 
   <div id="npc-crafting" class="npc-crafting">
     <h3>Crafting</h3>
-    <div class="crafting-grid" id="crafting-grid"></div>  
-    <button id="craft-btn">Craft</button>
+    <div id="craft-progress">
+      <div id="craft-bar"></div>
+    </div>
   </div>
   <audio id="bgMusic" loop>
     <source src="/lostbanger.wav" type="audio/wav">
@@ -348,18 +366,35 @@
         this.element.classList.add('chunk');
         this.element.setAttribute('transform', `translate(${x * 1000}, ${y * 1000})`);
         this.generated = false;
+        this.collectibles = [];
+        this.generate();
       }
+
       generate() {
         if (this.generated) return;
         const starCount = Math.floor(Math.random() * 50) + 50;
         for (let i = 0; i < starCount; i++) {
           const star = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-          star.setAttribute("cx", Math.random() * 1000);
-          star.setAttribute("cy", Math.random() * 1000);
+          const cx = Math.random() * 1000;
+          const cy = Math.random() * 1000;
+          star.setAttribute("cx", cx);
+          star.setAttribute("cy", cy);
           star.setAttribute("r", Math.random() * 2 + 1);
           star.setAttribute("fill", `rgba(255,255,255,${Math.random() * 0.5 + 0.5})`);
           star.classList.add('star');
           this.element.appendChild(star);
+        }
+        for (let i = 0; i < 10; i++) {
+          const collectible = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+          const cx = Math.random() * 1000;
+          const cy = Math.random() * 1000;
+          collectible.setAttribute("cx", cx);
+          collectible.setAttribute("cy", cy);
+          collectible.setAttribute("r", 8);
+          collectible.setAttribute("fill", "yellow");
+          collectible.classList.add('collectible');
+          this.element.appendChild(collectible);
+          this.collectibles.push({ element: collectible, x: cx, y: cy, collected: false });
         }
         if (Math.random() < 0.1) {
           const structure = document.createElementNS("http://www.w3.org/2000/svg", "g");
@@ -380,7 +415,9 @@
               structure.innerHTML = `<path d="M0,0 C50,50 100,50 150,0" stroke="#fff" fill="none"/>`;
               break;
           }
-          structure.setAttribute('transform', `translate(${Math.random() * 1000},${Math.random() * 1000})`);
+          const posX = Math.random() * 1000;
+          const posY = Math.random() * 1000;
+          structure.setAttribute('transform', `translate(${posX},${posY})`);
           this.element.appendChild(structure);
         }
         this.generated = true;
@@ -389,51 +426,6 @@
 
     class Game {
       constructor() {
-        if (!document.getElementById('gameCanvas')) {
-          const canvas = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-          canvas.id = 'gameCanvas';
-          canvas.setAttribute('viewBox', '-5000 -5000 10000 10000');
-          document.body.appendChild(canvas);
-        }
-        if (!document.getElementById('state-indicator')) {
-          const indicator = document.createElement('div');
-          indicator.id = 'state-indicator';
-          indicator.innerHTML = 'Current State: Initializing...';
-          document.body.appendChild(indicator);
-        }
-        if (!document.getElementById('action-log')) {
-          const log = document.createElement('div');
-          log.id = 'action-log';
-          log.innerHTML = 'Action Log:';
-          document.body.appendChild(log);
-        }
-        if (!document.getElementById('skip-btn')) {
-          const skipBtn = document.createElement('button');
-          skipBtn.id = 'skip-btn';
-          skipBtn.innerHTML = '&#x23ed;&#xfe0f; Skip Cooldown <span id="timer-value">3:00</span>';
-          document.body.appendChild(skipBtn);
-        }
-        if (!document.getElementById('start-btn')) {
-          const startBtn = document.createElement('button');
-          startBtn.id = 'start-btn';
-          startBtn.innerHTML = '&#x25b6;&#xfe0f; Start Experience';
-          document.body.appendChild(startBtn);
-        }
-        if (!document.getElementById('bgMusic')) {
-          const audio = document.createElement('audio');
-          audio.id = 'bgMusic';
-          audio.loop = true;
-          const source = document.createElement('source');
-          source.src = '/lostbanger.wav';
-          source.type = 'audio/wav';
-          audio.appendChild(source);
-          document.body.appendChild(audio);
-        }
-        if (!document.getElementById('countdown-timer')) {
-          const timer = document.createElement('div');
-          timer.id = 'countdown-timer';
-          document.body.appendChild(timer);
-        }
         this.canvas = document.getElementById('gameCanvas');
         this.stateIndicator = document.getElementById('state-indicator');
         this.actionLog = document.getElementById('action-log');
@@ -445,7 +437,6 @@
         this.countdownInterval = null;
         this.currentState = null;
         this.cooldown = false;
-        this.npc = this.createNPC();
         this.started = false;
         this.actionHistory = [];
         this.autonomousInterval = null;
@@ -456,36 +447,37 @@
         this.lastAutonomousMove = Date.now();
         this.audioContext = null;
         this.audioAnalyser = null;
+        this.audioData = null;
         this.collectibles = [];
         this.inventory = new NPCInventory();
-        this.crafting = new NPCCrafting(this.inventory);
+        this.crafting = new NPCCrafting(this.inventory, this);
         this.structures = [];
-        if (!localStorage.getItem('baseCollectibles')) {
-          localStorage.setItem('baseCollectibles', JSON.stringify([{
-            type: 'stardust',
-            color: '#00ffff',
-            value: 10
-          }, {
-            type: 'cosmicShard',
-            color: '#ff00ff',
-            value: 20
-          }, {
-            type: 'voidEssence',
-            color: '#ffff00',
-            value: 30
-          }]));
-        }
         this.initialize();
+
+        this.spawnedStructures = [];
+
+        if (!localStorage.getItem('baseCollectibles')) {
+          localStorage.setItem('baseCollectibles', JSON.stringify([
+            { type: 'stardust', color: '#00ffff', value: 10 },
+            { type: 'cosmicShard', color: '#ff00ff', value: 20 },
+            { type: 'voidEssence', color: '#ffff00', value: 30 }
+          ]));
+        }
+
+        if (!localStorage.getItem('godIdeas')) {
+          localStorage.setItem('godIdeas', JSON.stringify([]));
+        }
+
         if (this.skipBtn) {
           this.skipBtn.addEventListener('click', () => this.skipCooldown());
         }
         if (this.startBtn) {
           this.startBtn.addEventListener('click', () => this.startGame());
         }
-        if (this.skipBtn) this.skipBtn.classList.add('hidden');
-        if (this.stateIndicator) this.stateIndicator.classList.add('hidden');
-        if (this.actionLog) this.actionLog.classList.add('hidden');
-        if (this.countdownTimer) this.countdownTimer.classList.add('hidden');
+        this.skipBtn?.classList.add('hidden');
+        this.stateIndicator?.classList.add('hidden');
+        this.actionLog?.classList.add('hidden');
+        this.countdownTimer?.classList.add('hidden');
         this.startAutonomousBehavior();
       }
 
@@ -495,7 +487,7 @@
         npcSvg.setAttribute("cy", 0);
         npcSvg.setAttribute("r", "20");
         npcSvg.setAttribute("fill", "white");
-        npcSvg.style.animation = "pulse 2s infinite, glow 3s infinite, float 4s infinite";
+        npcSvg.classList.add('npc');
         this.canvas.appendChild(npcSvg);
         return npcSvg;
       }
@@ -508,6 +500,7 @@
       }
 
       initialize() {
+        this.npc = this.createNPC();
         this.updateVisibleChunks();
       }
 
@@ -525,7 +518,7 @@
               const chunk = new Chunk(chunkX, chunkY);
               this.chunks.set(key, chunk);
               this.canvas.appendChild(chunk.element);
-              chunk.generate();
+              chunk.collectibles.forEach(c => this.collectibles.push(c));
             }
           }
         }
@@ -534,28 +527,12 @@
           if (Math.abs(x - currentChunkX) > 3 || Math.abs(y - currentChunkY) > 3) {
             chunk.element.remove();
             this.chunks.delete(key);
+            chunk.collectibles.forEach(c => {
+              const index = this.collectibles.indexOf(c);
+              if (index > -1) this.collectibles.splice(index, 1);
+            });
           }
         }
-      }
-
-      addBackgroundElements() {
-        const createStar = () => {
-          const star = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-          star.setAttribute("cx", Math.random() * window.innerWidth);
-          star.setAttribute("cy", Math.random() * window.innerHeight);
-          star.setAttribute("r", Math.random() * 2 + 1);
-          star.setAttribute("fill", `rgba(255,255,255,${Math.random() * 0.5 + 0.5})`);
-          star.classList.add('star');
-          this.canvas.appendChild(star);
-        };
-        for (let i = 0; i < 200; i++) {
-          createStar();
-        }
-        setInterval(() => {
-          if (this.canvas.childElementCount < 500) {
-            createStar();
-          }
-        }, 200);
       }
 
       startGame() {
@@ -571,6 +548,7 @@
         this.startGameLoop();
         this.startCountdown(180);
         this.startAutonomousBehavior();
+        this.inventory.show();
       }
 
       async getAIAction(state) {
@@ -658,7 +636,6 @@ interface Response {
       handleNPCAction(action) {
         if (!action || !action.parameters) return;
         const duration = action.parameters.duration || 4000;
-        this.npc.style.transition = `transform ${duration}ms cubic-bezier(0.4, 0, 0.2, 1), fill 0.5s ease`;
         const targetX = action.parameters.x || parseFloat(this.npc.getAttribute("cx"));
         const targetY = action.parameters.y || parseFloat(this.npc.getAttribute("cy"));
         this.animateNPCTo(targetX, targetY, duration);
@@ -710,16 +687,22 @@ interface Response {
             structure.innerHTML = `<path d="M0,0 C50,50 100,50 150,0" stroke="${action.parameters.color || '#fff'}" fill="none"/>`;
             break;
         }
-        structure.setAttribute('transform', `translate(${action.parameters.x || 0},${action.parameters.y || 0})`);
+        const posX = action.parameters.x || 0;
+        const posY = action.parameters.y || 0;
+        structure.setAttribute('transform', `translate(${posX},${posY})`);
         this.canvas.appendChild(structure);
         this.structures.push(structure);
+
         if (action.parameters.effect === 'invert') {
           document.body.style.filter = 'invert(1)';
           setTimeout(() => document.body.style.filter = '', duration);
         } else if (action.parameters.effect === 'psychedelic') {
           document.body.style.animation = `hue-rotate ${duration}ms linear`;
-          setTimeout(() => document.body.style.animation = '', duration);
+          setTimeout(() => {
+            document.body.style.animation = '';
+          }, duration);
         }
+
         if (action.parameters.intensity) {
           const shake = Math.min(action.parameters.intensity * 20, 50);
           this.canvas.style.transform = `translate(${shake}px, ${shake}px)`;
@@ -727,8 +710,10 @@ interface Response {
             this.canvas.style.transform = `translate(0px, 0px)`;
           }, duration);
         }
+
         document.body.classList.add('god-active');
         setTimeout(() => document.body.classList.remove('god-active'), duration);
+
         const implementPastIdea = () => {
           const unimplementedIdeas = godIdeas.filter(idea => !idea.implemented);
           if (unimplementedIdeas.length > 0) {
@@ -754,8 +739,9 @@ interface Response {
           }
         };
         implementPastIdea();
+
         if (Math.random() < 0.3) {
-          this.spawnCollectible(action.parameters.x || 0, action.parameters.y || 0);
+          this.spawnCollectible(posX, posY);
         }
         if (Math.random() < 0.3) {
           const newRecipe = {
@@ -815,22 +801,82 @@ interface Response {
             }, 180000);
           }
         }, 1000);
-        requestAnimationFrame(() => this.updateViewBox());
+        this.updateViewBox();
         setInterval(() => {
           if (Date.now() - this.lastChunkUpdate > 1000) {
             this.updateVisibleChunks();
             this.lastChunkUpdate = Date.now();
           }
         }, 1000);
+        requestAnimationFrame(() => this.gameLoop());
       }
 
-      updateViewBox() {
-        const x = parseFloat(this.npc.getAttribute('cx'));
-        const y = parseFloat(this.npc.getAttribute('cy'));
-        const viewBoxWidth = window.innerWidth;
-        const viewBoxHeight = window.innerHeight;
-        this.canvas.setAttribute('viewBox', `${x - viewBoxWidth / 2} ${y - viewBoxHeight / 2} ${viewBoxWidth} ${viewBoxHeight}`);
-        requestAnimationFrame(() => this.updateViewBox());
+      gameLoop() {
+        this.checkCollisions();
+        this.visualizeAudio();
+        requestAnimationFrame(() => this.gameLoop());
+      }
+
+      checkCollisions() {
+        const npcX = parseFloat(this.npc.getAttribute("cx"));
+        const npcY = parseFloat(this.npc.getAttribute("cy"));
+        const pickupDistance = 20;
+        this.collectibles.forEach(collectible => {
+          if (!collectible.collected) {
+            const dx = npcX - collectible.x;
+            const dy = npcY - collectible.y;
+            const distance = Math.hypot(dx, dy);
+            if (distance < pickupDistance) {
+              collectible.collected = true;
+              collectible.element.remove();
+              this.collectibles.splice(this.collectibles.indexOf(collectible), 1);
+              const baseItems = JSON.parse(localStorage.getItem('baseCollectibles'));
+              if (baseItems && baseItems.length) {
+                const randomItem = baseItems[Math.floor(Math.random() * baseItems.length)];
+                this.inventory.addItem(randomItem);
+                this.logAction(`Collected ${randomItem.type}`);
+                this.crafting.checkAndCraft();
+              }
+            }
+          }
+        });
+      }
+
+      spawnCollectible(x, y) {
+        const collectible = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+        collectible.setAttribute("cx", x);
+        collectible.setAttribute("cy", y);
+        collectible.setAttribute("r", 8);
+        collectible.setAttribute("fill", "yellow");
+        collectible.classList.add('collectible');
+        this.canvas.appendChild(collectible);
+        this.collectibles.push({ element: collectible, x: x, y: y, collected: false });
+      }
+
+      animateNPCTo(targetX, targetY, duration) {
+        const startX = parseFloat(this.npc.getAttribute("cx"));
+        const startY = parseFloat(this.npc.getAttribute("cy"));
+        const deltaX = targetX - startX;
+        const deltaY = targetY - startY;
+        const startTime = performance.now();
+
+        const animate = (currentTime) => {
+          const elapsed = currentTime - startTime;
+          const progress = Math.min(elapsed / duration, 1);
+          const easeProgress = this.easeInOutCubic(progress);
+          const currentX = startX + deltaX * easeProgress;
+          const currentY = startY + deltaY * easeProgress;
+          this.npc.setAttribute("cx", currentX);
+          this.npc.setAttribute("cy", currentY);
+          if (progress < 1) {
+            requestAnimationFrame(animate);
+          }
+        };
+        requestAnimationFrame(animate);
+      }
+
+      easeInOutCubic(t) {
+        return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
       }
 
       startCountdown(seconds) {
@@ -874,6 +920,10 @@ interface Response {
       }
 
       autonomousMove() {
+        if (this.collectibles.length > 0) {
+          this.moveToNearestCollectible();
+          return;
+        }
         const movements = [{
           fn: this.wander.bind(this),
           weight: 3,
@@ -901,7 +951,7 @@ interface Response {
         }, {
           fn: () => {
             if (this.inventory.items.length >= 2 && Math.random() < 0.2) {
-              this.crafting.show();
+              this.crafting.checkAndCraft();
             }
           },
           weight: 1,
@@ -916,6 +966,28 @@ interface Response {
             this.lastAutonomousMove = Date.now() + movement.cooldown;
             break;
           }
+        }
+      }
+
+      moveToNearestCollectible() {
+        if (this.collectibles.length === 0) return;
+        let nearest = null;
+        let minDist = Infinity;
+        const npcX = parseFloat(this.npc.getAttribute("cx"));
+        const npcY = parseFloat(this.npc.getAttribute("cy"));
+        this.collectibles.forEach(collectible => {
+          if (!collectible.collected) {
+            const dx = collectible.x - npcX;
+            const dy = collectible.y - npcY;
+            const distance = Math.hypot(dx, dy);
+            if (distance < minDist) {
+              minDist = distance;
+              nearest = collectible;
+            }
+          }
+        });
+        if (nearest) {
+          this.animateNPCTo(nearest.x, nearest.y, 2000);
         }
       }
 
@@ -969,7 +1041,6 @@ interface Response {
 
       findNearestStructure() {
         if (!this.structures.length) return null;
-        // Simple nearest structure finder
         let nearest = null;
         let minDist = Infinity;
         const npcX = parseFloat(this.npc.getAttribute("cx"));
@@ -1020,8 +1091,8 @@ interface Response {
       seekCollectible() {
         if (!this.collectibles.length) return;
         const target = this.collectibles[0];
-        const cx = parseFloat(target.getAttribute("cx"));
-        const cy = parseFloat(target.getAttribute("cy"));
+        const cx = parseFloat(target.element.getAttribute("cx"));
+        const cy = parseFloat(target.element.getAttribute("cy"));
         this.npc.classList.add('npc-collecting');
         const trail = document.createElement('div');
         trail.className = 'npc-trail';
@@ -1031,16 +1102,15 @@ interface Response {
         this.animateNPCTo(cx, cy, 2000);
         setTimeout(() => {
           this.npc.classList.remove('npc-collecting');
-          target.remove();
+          target.element.remove();
           this.collectibles.shift();
           trail.remove();
           const baseItems = JSON.parse(localStorage.getItem('baseCollectibles'));
           if (baseItems && baseItems.length) {
             const randomItem = baseItems[Math.floor(Math.random() * baseItems.length)];
             this.inventory.addItem(randomItem);
-            if (Math.random() < 0.3 && this.inventory.items.length >= 2) {
-              this.crafting.show();
-            }
+            this.logAction(`Collected ${randomItem.type}`);
+            this.crafting.checkAndCraft();
           }
         }, 2500);
       }
@@ -1053,7 +1123,6 @@ interface Response {
         this.audioAnalyser.connect(this.audioContext.destination);
         this.audioAnalyser.fftSize = 256;
         this.audioData = new Uint8Array(this.audioAnalyser.frequencyBinCount);
-        this.visualizeAudio();
       }
 
       visualizeAudio() {
@@ -1082,44 +1151,15 @@ interface Response {
           const y = Math.random() * 10000 - 5000;
           this.spawnCollectible(x, y);
         }
-        requestAnimationFrame(() => this.visualizeAudio());
       }
 
-      spawnCollectible(x, y) {
-        const collectible = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-        collectible.setAttribute("cx", x);
-        collectible.setAttribute("cy", y);
-        collectible.setAttribute("r", 10);
-        collectible.setAttribute("fill", "yellow");
-        collectible.classList.add('collectible');
-        this.canvas.appendChild(collectible);
-        this.collectibles.push(collectible);
-      }
-
-      animateNPCTo(targetX, targetY, duration) {
-        const startX = parseFloat(this.npc.getAttribute("cx"));
-        const startY = parseFloat(this.npc.getAttribute("cy"));
-        const deltaX = targetX - startX;
-        const deltaY = targetY - startY;
-        const startTime = performance.now();
-
-        const animate = (currentTime) => {
-          const elapsed = currentTime - startTime;
-          const progress = Math.min(elapsed / duration, 1);
-          const easeProgress = this.easeInOutCubic(progress);
-          const currentX = startX + deltaX * easeProgress;
-          const currentY = startY + deltaY * easeProgress;
-          this.npc.setAttribute("cx", currentX);
-          this.npc.setAttribute("cy", currentY);
-          if (progress < 1) {
-            requestAnimationFrame(animate);
-          }
-        };
-        requestAnimationFrame(animate);
-      }
-
-      easeInOutCubic(t) {
-        return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+      updateViewBox() {
+        const x = parseFloat(this.npc.getAttribute('cx'));
+        const y = parseFloat(this.npc.getAttribute('cy'));
+        const viewBoxWidth = window.innerWidth;
+        const viewBoxHeight = window.innerHeight;
+        this.canvas.setAttribute('viewBox', `${x - viewBoxWidth / 2} ${y - viewBoxHeight / 2} ${viewBoxWidth} ${viewBoxHeight}`);
+        requestAnimationFrame(() => this.updateViewBox());
       }
     }
 
@@ -1155,11 +1195,16 @@ interface Response {
           </div>
         `).join('');
       }
+      show() {
+        const inventoryDiv = document.getElementById('npc-inventory');
+        inventoryDiv.classList.remove('hidden');
+      }
     }
 
     class NPCCrafting {
-      constructor(inventory) {
+      constructor(inventory, game) {
         this.inventory = inventory;
+        this.game = game;
         this.recipes = [{
           inputs: ['stardust', 'stardust'],
           output: {
@@ -1176,52 +1221,59 @@ interface Response {
           }
         }];
         this.element = document.getElementById('npc-crafting');
-        this.gridElement = document.getElementById('crafting-grid');
-        this.craftBtn = document.getElementById('craft-btn');
-        this.setupEvents();
+        this.craftBar = document.getElementById('craft-bar');
+        this.isCrafting = false;
       }
-      setupEvents() {
-        if (this.craftBtn) {
-          this.craftBtn.addEventListener('click', () => this.tryCraft());
-        }
-      }
-      show() {
-        this.element?.classList.add('active');
-      }
-      hide() {
-        this.element?.classList.remove('active');
-      }
-      tryCraft() {
-        const availableTypes = this.inventory.items.map(item => item.type);
+      checkAndCraft() {
+        if (this.isCrafting) return;
         for (const recipe of this.recipes) {
-          if (this.canCraft(recipe, availableTypes)) {
-            this.craft(recipe);
+          if (this.canCraft(recipe)) {
+            this.startCrafting(recipe);
             break;
           }
         }
       }
-      canCraft(recipe, availableTypes) {
+      canCraft(recipe) {
         const itemCounts = {};
-        availableTypes.forEach(type => {
-          itemCounts[type] = (itemCounts[type] || 0) + 1;
+        this.inventory.items.forEach(item => {
+          itemCounts[item.type] = (itemCounts[item.type] || 0) + 1;
         });
         return recipe.inputs.every(input => {
-          if (itemCounts[input] > 0) {
-            itemCounts[input]--;
-            return true;
-          }
-          return false;
+          return (itemCounts[input] || 0) > 0;
         });
       }
-      craft(recipe) {
+      startCrafting(recipe) {
+        this.isCrafting = true;
+        this.element.classList.add('active');
+        this.craftBar.style.width = '0%';
+        const craftDuration = 3000; // 3 seconds
+        const startTime = performance.now();
+        const animate = (currentTime) => {
+          const elapsed = currentTime - startTime;
+          const progress = Math.min(elapsed / craftDuration, 1);
+          this.craftBar.style.width = `${progress * 100}%`;
+          if (progress < 1) {
+            requestAnimationFrame(animate);
+          } else {
+            this.finishCrafting(recipe);
+          }
+        };
+        requestAnimationFrame(animate);
+      }
+      finishCrafting(recipe) {
+        // Remove inputs
         recipe.inputs.forEach(input => {
           const index = this.inventory.items.findIndex(item => item.type === input);
           if (index !== -1) {
             this.inventory.removeItem(index);
           }
         });
+        // Add output
         this.inventory.addItem(recipe.output);
-        this.hide();
+        this.game.logAction(`Crafted ${recipe.output.type}`);
+        this.isCrafting = false;
+        this.element.classList.remove('active');
+        this.checkAndCraft();
       }
     }
 
