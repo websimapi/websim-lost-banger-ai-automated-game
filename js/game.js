@@ -168,65 +168,44 @@ export class Game {
     return nearest;
   }
 
-  checkNextAction() {
-    if (this.cooldown || this.isCrafting || this.isMoving) return;
-
-    // Check if it's been idle too long
-    if (Date.now() - this.lastAutonomousMove > this.idleTimeout) {
-      this.exploreNewChunks();
-      return;
-    }
-
-    // Get current priorities
-    const priorities = this.evaluateActionPriorities();
-    const highestPriority = Math.max(...Object.values(priorities));
-    
-    // Execute highest priority action
-    if (priorities.collect === highestPriority && this.inventory.items.length < this.inventory.maxSize) {
-      this.collectNearestStardust();
-    } else if (priorities.craft === highestPriority) {
-      this.crafting.checkAndCraft();
-    } else if (priorities.place === highestPriority) {
-      this.placeCreation();
-    } else if (priorities.explore === highestPriority) {
-      this.exploreStructures();
-    } else {
-      this.exploreNewChunks();
-    }
-  }
-
   evaluateActionPriorities() {
     const priorities = {
-      collect: 0,
+      collect: 0, 
       craft: 0,
       place: 0,
       explore: 0
     };
 
-    // Evaluate collection priority
+    // Higher priority for collection when inventory not full
     const nearestCollectible = this.findNearestCollectible();
-    if (nearestCollectible) {
+    if (nearestCollectible && this.inventory.items.length < this.inventory.maxSize) {
       const distance = this.getDistanceToCollectible(nearestCollectible);
       priorities.collect = Math.max(0, 100 - distance / 10);
-    }
-
-    // Evaluate crafting priority
-    if (this.inventory.items.length >= 2) {
-      const canCraftSomething = this.crafting.recipes.some(recipe => this.crafting.canCraft(recipe));
-      if (canCraftSomething) {
-        priorities.craft = 80 + this.inventory.items.length * 5;
+      
+      // Extra priority boost if inventory is low
+      if (this.inventory.items.length < 3) {
+        priorities.collect += 50;
       }
     }
 
-    // Evaluate placing priority
+    // Crafting priority increases with inventory fullness
+    if (this.inventory.items.length >= 2) {
+      const canCraftSomething = this.crafting.recipes.some(recipe => this.crafting.canCraft(recipe));
+      if (canCraftSomething) {
+        priorities.craft = 60 + (this.inventory.items.length * 10);
+      }
+    }
+
+    // Placing priority for crafted items
     const hasCraftedItems = this.inventory.items.some(item => 
       item.type.includes('Essence') || item.type.includes('Time'));
     if (hasCraftedItems) {
       priorities.place = 70;
     }
 
-    // Evaluate exploration priority
-    priorities.explore = Math.min(60, Math.floor((Date.now() - this.lastAutonomousMove) / 1000));
+    // Exploration is lowest priority but increases with idle time
+    const idleTime = Date.now() - this.lastAutonomousMove;
+    priorities.explore = Math.min(40, Math.floor(idleTime / 1000));
 
     return priorities;
   }
@@ -358,18 +337,20 @@ export class Game {
 
   moveTowards(targetX, targetY, duration = 3000) {
     if (!this.npc || this.isMoving) return;
-    
+
     this.isMoving = true;
     const startX = parseFloat(this.npc.getAttribute("cx"));
     const startY = parseFloat(this.npc.getAttribute("cy"));
-    const startTime = performance.now();
     
+    // Don't move if already at target
     if (Math.abs(targetX - startX) < 1 && Math.abs(targetY - startY) < 1) {
       this.isMoving = false;
       this.npc.classList.remove('npc-collecting');
       setTimeout(() => this.checkNextAction(), 100);
       return;
     }
+
+    const startTime = performance.now();
     
     if (this.moveAnimation) {
       cancelAnimationFrame(this.moveAnimation);
@@ -414,25 +395,6 @@ export class Game {
     if (!this.npc || this.isMoving || this.cooldown) return;
 
     this.checkNextAction();
-  }
-
-  spawnCollectible(x, y) {
-    const collectible = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-    collectible.setAttribute("cx", x);
-    collectible.setAttribute("cy", y);
-    collectible.setAttribute("r", 8);
-    collectible.setAttribute("fill", "yellow");
-    collectible.classList.add('collectible');
-    this.canvas.appendChild(collectible);
-    
-    this.collectibles.push({
-      element: collectible,
-      x: x,
-      y: y,
-      collected: false,
-      type: 'stardust',
-      value: Math.floor(Math.random() * 20) + 10,
-    });
   }
 
   checkCollisions() {
@@ -481,6 +443,64 @@ export class Game {
         this.autonomousMove();
       }
     }, 500);
+  }
+
+  checkNextAction() {
+    if (this.cooldown || this.isCrafting || this.isMoving) return;
+
+    // Get current priorities
+    const priorities = this.evaluateActionPriorities();
+    const highestPriority = Math.max(...Object.values(priorities));
+    
+    // If no high priority actions and being idle too long, force exploration
+    if (highestPriority < 30 || Date.now() - this.lastAutonomousMove > this.idleTimeout) {
+      this.exploreNewChunks();
+      return;
+    }
+
+    // Execute highest priority action
+    if (priorities.collect === highestPriority) {
+      const nearest = this.findNearestCollectible();
+      if (nearest) {
+        this.moveTowardsCollectible(nearest);
+      } else {
+        this.exploreNewChunks();
+      }
+    } else if (priorities.craft === highestPriority) {
+      this.crafting.checkAndCraft();
+    } else if (priorities.place === highestPriority) {
+      this.placeCreation();
+    } else if (priorities.explore === highestPriority) {
+      if (Math.random() < 0.7) {
+        this.exploreStructures();
+      } else {
+        this.exploreNewChunks();
+      }
+    }
+
+    // Schedule next check if not moving
+    if (!this.isMoving && !this.isCrafting) {
+      setTimeout(() => this.checkNextAction(), 100);
+    }
+  }
+
+  spawnCollectible(x, y) {
+    const collectible = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+    collectible.setAttribute("cx", x);
+    collectible.setAttribute("cy", y);
+    collectible.setAttribute("r", 8);
+    collectible.setAttribute("fill", "yellow");
+    collectible.classList.add('collectible');
+    this.canvas.appendChild(collectible);
+    
+    this.collectibles.push({
+      element: collectible,
+      x: x,
+      y: y,
+      collected: false,
+      type: 'stardust',
+      value: Math.floor(Math.random() * 20) + 10,
+    });
   }
 
   startGame() {
