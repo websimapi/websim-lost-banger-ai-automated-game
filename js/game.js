@@ -25,7 +25,7 @@ export class Game {
     this.visibleChunkRadius = 3;
     this.chunks = new Map();
     this.targetPosition = { x: 0, y: 0 };
-    this.moveSpeed = 0.5; 
+    this.moveSpeed = 0.3; 
     this.collectibles = [];
     this.inventory = new NPCInventory();
     this.crafting = new NPCCrafting(this.inventory, this);
@@ -146,30 +146,90 @@ export class Game {
       cancelAnimationFrame(this.moveAnimation);
     }
     
-    const animate = () => {
-      if (!this.npc) return;
+    const startX = parseFloat(this.npc.getAttribute("cx"));
+    const startY = parseFloat(this.npc.getAttribute("cy"));
+    const startTime = performance.now();
+    
+    // Reduced movement speed for smoother motion
+    this.moveSpeed = 0.3;
+    
+    const animate = (currentTime) => {
+      const elapsed = currentTime - startTime;
+      const progress = Math.min(elapsed / duration, 1);
       
-      const currentX = parseFloat(this.npc.getAttribute("cx"));
-      const currentY = parseFloat(this.npc.getAttribute("cy"));
+      // Use easing for smoother movement
+      const easeProgress = 0.5 - Math.cos(progress * Math.PI) / 2;
       
-      const dx = this.targetPosition.x - currentX;
-      const dy = this.targetPosition.y - currentY;
-      const distance = Math.hypot(dx, dy);
+      const currentX = startX + (this.targetPosition.x - startX) * easeProgress;
+      const currentY = startY + (this.targetPosition.y - startY) * easeProgress;
       
-      if (distance > 1) {
-        const newX = currentX + (dx * this.moveSpeed);
-        const newY = currentY + (dy * this.moveSpeed);
-        
-        this.npc.setAttribute("cx", newX);
-        this.npc.setAttribute("cy", newY);
-        this.updateCamera();
+      this.npc.setAttribute("cx", currentX);
+      this.npc.setAttribute("cy", currentY);
+      this.updateCamera();
+      
+      if (progress < 1) {
         this.moveAnimation = requestAnimationFrame(animate);
       } else {
         this.lastAutonomousMove = Date.now();
+        this.checkNextAction(); // Queue up next action
       }
     };
     
     this.moveAnimation = requestAnimationFrame(animate);
+  }
+
+  findNearestCollectible() {
+    if (!this.npc || this.collectibles.length === 0) return null;
+    
+    const npcX = parseFloat(this.npc.getAttribute("cx"));
+    const npcY = parseFloat(this.npc.getAttribute("cy"));
+    
+    let nearest = null;
+    let minDist = Infinity;
+    
+    // Only consider uncollected items within visible range
+    const visibleRange = this.chunkSize * 2;
+    
+    this.collectibles.forEach(collectible => {
+      if (!collectible.collected) {
+        const dx = collectible.x - npcX;
+        const dy = collectible.y - npcY;
+        const distance = Math.hypot(dx, dy);
+        
+        // Only consider items within visible range
+        if (distance < visibleRange && distance < minDist) {
+          minDist = distance;
+          nearest = collectible;
+        }
+      }
+    });
+    
+    return nearest;
+  }
+
+  checkNextAction() {
+    // Don't queue new actions during cooldown
+    if (this.cooldown) return;
+    
+    const nearest = this.findNearestCollectible();
+    
+    if (nearest) {
+      // If there's a nearby collectible, move towards it
+      this.moveTowards(nearest.x, nearest.y);
+      return;
+    }
+    
+    // If no collectibles nearby, check if we should craft
+    if (this.inventory.items.length >= 2) {
+      this.crafting.checkAndCraft();
+      return;
+    }
+    
+    // If nothing else to do and we've been idle, wander
+    const idleTime = Date.now() - this.lastAutonomousMove;
+    if (idleTime > this.idleTimeout) {
+      this.wander();
+    }
   }
 
   updateCamera() {
@@ -192,29 +252,127 @@ export class Game {
     }
   }
 
-  findNearestCollectible() {
-    if (!this.npc || this.collectibles.length === 0) return null;
+  autonomousMove() {
+    if (!this.npc) return;
+    
+    const now = Date.now();
+    const timeSinceLastMove = now - this.lastAutonomousMove;
+
+    // If we're not already moving somewhere
+    if (!this.moveAnimation) {
+      // First priority: Check for nearby collectibles
+      const nearest = this.findNearestCollectible();
+      if (nearest && !nearest.collected) {
+        this.moveTowards(nearest.x, nearest.y);
+        this.npc.classList.add('npc-collecting');
+        this.lastAutonomousMove = now;
+        return;
+      } else {
+        this.npc.classList.remove('npc-collecting');
+      }
+
+      // If idle for too long, start wandering
+      if (timeSinceLastMove > this.idleTimeout) {
+        this.wander();
+        return;
+      }
+
+      // Occasionally wander even when not idle
+      if (Math.random() < 0.05) {
+        this.wander();
+      }
+    }
+  }
+
+  wander() {
+    if (!this.npc) return;
+    
+    const currentX = parseFloat(this.npc.getAttribute("cx"));
+    const currentY = parseFloat(this.npc.getAttribute("cy"));
+    
+    // Create a more natural wandering pattern
+    const angle = Math.random() * Math.PI * 2;
+    const distance = Math.random() * 200 + 100; // Reduced wander distance
+    
+    const targetX = currentX + Math.cos(angle) * distance;
+    const targetY = currentY + Math.sin(angle) * distance;
+    
+    // Move with a longer duration for smoother movement
+    this.moveTowards(targetX, targetY, 3000);
+    this.lastAutonomousMove = Date.now();
+  }
+
+  spawnCollectible(x, y) {
+    const collectible = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+    collectible.setAttribute("cx", x);
+    collectible.setAttribute("cy", y);
+    collectible.setAttribute("r", 8);
+    collectible.setAttribute("fill", "yellow");
+    collectible.classList.add('collectible');
+    this.canvas.appendChild(collectible);
+    
+    // Store the absolute world position
+    this.collectibles.push({
+      element: collectible,
+      x: x,
+      y: y,
+      collected: false,
+      type: 'stardust',
+      value: Math.floor(Math.random() * 20) + 10
+    });
+  }
+
+  checkCollisions() {
+    if (!this.npc) return;
     
     const npcX = parseFloat(this.npc.getAttribute("cx"));
     const npcY = parseFloat(this.npc.getAttribute("cy"));
-    
-    let nearest = null;
-    let minDist = Infinity;
-    
-    this.collectibles.forEach(collectible => {
+    const pickupDistance = 40; // Slightly increased pickup range
+
+    // Check each collectible
+    for (let i = this.collectibles.length - 1; i >= 0; i--) {
+      const collectible = this.collectibles[i];
       if (!collectible.collected) {
-        const dx = collectible.x - npcX;
-        const dy = collectible.y - npcY;
+        const dx = npcX - collectible.x;
+        const dy = npcY - collectible.y;
         const distance = Math.hypot(dx, dy);
         
-        if (distance < minDist) {
-          minDist = distance;
-          nearest = collectible;
+        if (distance < pickupDistance) {
+          collectible.collected = true;
+          collectible.element.remove();
+          
+          // Add to inventory with animation
+          const item = {
+            type: collectible.type,
+            color: '#ffff00',
+            value: collectible.value
+          };
+          
+          this.inventory.addItem(item);
+          this.logAction(`Collected ${item.type} (${item.value})`);
+          this.crafting.checkAndCraft();
+          
+          // Remove from collectibles array
+          this.collectibles.splice(i, 1);
+          
+          // Queue up next action
+          setTimeout(() => this.checkNextAction(), 100);
         }
       }
-    });
-    
-    return nearest;
+    }
+  }
+
+  startAutonomousBehavior() {
+    if (this.autonomousInterval) {
+      clearInterval(this.autonomousInterval);
+    }
+
+    // Check for actions more frequently
+    this.autonomousInterval = setInterval(() => {
+      if (!this.cooldown) {
+        this.autonomousMove();
+      }
+    }, 500);
   }
 
   startGame() {
@@ -490,104 +648,6 @@ interface Response {
     requestAnimationFrame(() => this.gameLoop());
   }
 
-  spawnCollectible(x, y) {
-    const collectible = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-    collectible.setAttribute("cx", x);
-    collectible.setAttribute("cy", y);
-    collectible.setAttribute("r", 8);
-    collectible.setAttribute("fill", "yellow");
-    collectible.classList.add('collectible');
-    this.canvas.appendChild(collectible);
-    
-    // Store the absolute world position
-    this.collectibles.push({
-      element: collectible,
-      x: x,
-      y: y,
-      collected: false,
-      type: 'stardust',
-      value: Math.floor(Math.random() * 20) + 10
-    });
-  }
-
-  checkCollisions() {
-    if (!this.npc) return;
-    
-    const npcX = parseFloat(this.npc.getAttribute("cx"));
-    const npcY = parseFloat(this.npc.getAttribute("cy"));
-    const pickupDistance = 30;
-
-    // Check each collectible
-    for (let i = this.collectibles.length - 1; i >= 0; i--) {
-      const collectible = this.collectibles[i];
-      if (!collectible.collected) {
-        const dx = npcX - collectible.x;
-        const dy = npcY - collectible.y;
-        const distance = Math.hypot(dx, dy);
-        
-        if (distance < pickupDistance) {
-          collectible.collected = true;
-          collectible.element.remove();
-          
-          // Add to inventory
-          const item = {
-            type: collectible.type,
-            color: '#ffff00',
-            value: collectible.value
-          };
-          
-          this.inventory.addItem(item);
-          this.logAction(`Collected ${item.type} (${item.value})`);
-          this.crafting.checkAndCraft();
-          
-          // Remove from collectibles array
-          this.collectibles.splice(i, 1);
-        }
-      }
-    }
-  }
-
-  autonomousMove() {
-    if (!this.npc) return;
-    
-    const now = Date.now();
-    const timeSinceLastMove = now - this.lastAutonomousMove;
-
-    // First priority: Check for nearby collectibles
-    const nearest = this.findNearestCollectible();
-    if (nearest && !nearest.collected) {
-      this.moveTowards(nearest.x, nearest.y);
-      this.npc.classList.add('npc-collecting');
-      this.lastAutonomousMove = now;
-      return;
-    } else {
-      this.npc.classList.remove('npc-collecting');
-    }
-
-    // If idle for too long, start wandering
-    if (timeSinceLastMove > this.idleTimeout) {
-      this.wander();
-      return;
-    }
-
-    // Occasionally wander even when not idle
-    if (Math.random() < 0.1 || timeSinceLastMove > 5000) {
-      this.wander();
-    }
-  }
-
-  startAutonomousBehavior() {
-    if (this.autonomousInterval) {
-      clearInterval(this.autonomousInterval);
-    }
-
-    this.autonomousInterval = setInterval(() => {
-      if (!this.cooldown) {
-        this.autonomousMove();
-      }
-    }, 1000);
-  }
-
   startCountdown(seconds) {
     if (!this.timerValue) return;
     if (this.countdownInterval) {
@@ -665,21 +725,5 @@ interface Response {
       const y = npcY + (Math.random() - 0.5) * spread;
       this.spawnCollectible(x, y);
     }
-  }
-
-  wander() {
-    if (!this.npc) return;
-    
-    const currentX = parseFloat(this.npc.getAttribute("cx"));
-    const currentY = parseFloat(this.npc.getAttribute("cy"));
-    
-    const angle = Math.random() * Math.PI * 2;
-    const distance = Math.random() * 300 + 200;
-    
-    const targetX = currentX + Math.cos(angle) * distance;
-    const targetY = currentY + Math.sin(angle) * distance;
-    
-    this.moveTowards(targetX, targetY);
-    this.lastAutonomousMove = Date.now();
   }
 }
