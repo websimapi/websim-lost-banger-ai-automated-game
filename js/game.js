@@ -19,19 +19,19 @@ export class Game {
     this.started = false;
     this.actionHistory = [];
     this.autonomousInterval = null;
-    this.chunks = new Map();
+    this.viewportWidth = window.innerWidth;
+    this.viewportHeight = window.innerHeight;
     this.chunkSize = 1000;
-    this.loadedChunks = new Set();
-    this.lastChunkUpdate = 0;
-    this.lastAutonomousMove = Date.now();
-    this.audioContext = null;
-    this.audioAnalyser = null;
-    this.audioData = null;
+    this.visibleChunkRadius = 3;
+    this.chunks = new Map();
+    this.targetPosition = { x: 0, y: 0 };
+    this.moveSpeed = 0.5; 
     this.collectibles = [];
     this.inventory = new NPCInventory();
     this.crafting = new NPCCrafting(this.inventory, this);
     this.structures = [];
     this.spawnedStructures = [];
+    this.npc = null;
     if (!localStorage.getItem('baseCollectibles')) {
       localStorage.setItem('baseCollectibles', JSON.stringify([{
         type: 'stardust',
@@ -60,18 +60,8 @@ export class Game {
     this.stateIndicator?.classList.add('hidden');
     this.actionLog?.classList.add('hidden');
     this.countdownTimer?.classList.add('hidden');
-    this.targetPosition = { x: 0, y: 0 };
-    this.currentPosition = { x: 0, y: 0 };
-    this.movementSpeed = 0.5; // Lower = slower movement
-    this.isMoving = false;
-    this.lastBehaviorTime = Date.now();
-    this.behaviorCooldown = 2000; // Time between autonomous behaviors
-    this.placedObjects = [];
-    this.baseColors = ['#ffffff', '#88ffff', '#ff88ff', '#ffff88'];
-    this.currentColorIndex = 0;
-    this.colorTransitionSpeed = 0.01;
-
-    this.startIdleAnimation();
+    this.initialize();
+    this.startAutonomousBehavior();
   }
 
   createNPC() {
@@ -104,30 +94,99 @@ export class Game {
     const npcY = parseFloat(this.npc?.getAttribute("cy")) || 0;
     const currentChunkX = Math.floor(npcX / this.chunkSize);
     const currentChunkY = Math.floor(npcY / this.chunkSize);
-    for (let dx = -2; dx <= 2; dx++) {
-      for (let dy = -2; dy <= 2; dy++) {
-        const chunkX = currentChunkX + dx;
-        const chunkY = currentChunkY + dy;
-        const key = `${chunkX},${chunkY}`;
-        if (!this.chunks.has(key)) {
-          const chunk = new Chunk(chunkX, chunkY);
-          this.chunks.set(key, chunk);
-          this.canvas.appendChild(chunk.element);
-          chunk.collectibles.forEach(c => this.collectibles.push(c));
+
+    for (let dx = -this.visibleChunkRadius; dx <= this.visibleChunkRadius; dx++) {
+      for (let dy = -this.visibleChunkRadius; dy <= this.visibleChunkRadius; dy++) {
+        const distance = Math.hypot(dx, dy);
+        if (distance <= this.visibleChunkRadius) {
+          const chunkX = currentChunkX + dx;
+          const chunkY = currentChunkY + dy;
+          const key = `${chunkX},${chunkY}`;
+          
+          if (!this.chunks.has(key)) {
+            const chunk = new Chunk(chunkX, chunkY);
+            this.chunks.set(key, chunk);
+            this.canvas.appendChild(chunk.element);
+            chunk.collectibles.forEach(c => this.collectibles.push(c));
+            chunk.structures.forEach(s => this.structures.push(s));
+          }
         }
       }
     }
-    for (const [key, chunk] of this.chunks) {
+
+    for (const [key, chunk] of this.chunks.entries()) {
       const [x, y] = key.split(',').map(Number);
-      if (Math.abs(x - currentChunkX) > 3 || Math.abs(y - currentChunkY) > 3) {
-        chunk.element.remove();
+      const distance = Math.hypot(x - currentChunkX, y - currentChunkY);
+      if (distance > this.visibleChunkRadius + 1) {
+        chunk.cleanup();
         this.chunks.delete(key);
-        chunk.collectibles.forEach(c => {
-          const index = this.collectibles.indexOf(c);
-          if (index > -1) this.collectibles.splice(index, 1);
-        });
       }
     }
+  }
+
+  moveTowards(targetX, targetY, duration = 2000) {
+    this.targetPosition = { x: targetX, y: targetY };
+    
+    const animate = () => {
+      if (!this.npc) return;
+      
+      const currentX = parseFloat(this.npc.getAttribute("cx"));
+      const currentY = parseFloat(this.npc.getAttribute("cy"));
+      
+      const dx = this.targetPosition.x - currentX;
+      const dy = this.targetPosition.y - currentY;
+      const distance = Math.hypot(dx, dy);
+      
+      if (distance > 1) {
+        const newX = currentX + (dx * this.moveSpeed);
+        const newY = currentY + (dy * this.moveSpeed);
+        
+        this.npc.setAttribute("cx", newX);
+        this.npc.setAttribute("cy", newY);
+        this.updateCamera();
+        requestAnimationFrame(animate);
+      }
+    };
+    
+    animate();
+  }
+
+  updateCamera() {
+    if (!this.npc) return;
+    
+    const x = parseFloat(this.npc.getAttribute("cx"));
+    const y = parseFloat(this.npc.getAttribute("cy"));
+    
+    const viewBoxWidth = this.viewportWidth;
+    const viewBoxHeight = this.viewportHeight;
+    
+    this.canvas.setAttribute('viewBox', 
+      `${x - viewBoxWidth/2} ${y - viewBoxHeight/2} ${viewBoxWidth} ${viewBoxHeight}`);
+  }
+
+  findNearestCollectible() {
+    if (!this.npc || this.collectibles.length === 0) return null;
+    
+    const npcX = parseFloat(this.npc.getAttribute("cx"));
+    const npcY = parseFloat(this.npc.getAttribute("cy"));
+    
+    let nearest = null;
+    let minDist = Infinity;
+    
+    this.collectibles.forEach(collectible => {
+      if (!collectible.collected) {
+        const dx = collectible.x - npcX;
+        const dy = collectible.y - npcY;
+        const distance = Math.hypot(dx, dy);
+        
+        if (distance < minDist) {
+          minDist = distance;
+          nearest = collectible;
+        }
+      }
+    });
+    
+    return nearest;
   }
 
   startGame() {
@@ -142,7 +201,6 @@ export class Game {
     this.initAudio();
     this.startGameLoop();
     this.startCountdown(180);
-    this.startAutonomousBehavior();
     this.inventory.show();
   }
 
@@ -200,7 +258,6 @@ interface Response {
   }
 
   async executeState() {
-    this.lastAutonomousMove = Date.now() + 10000;
     const states = [GameState.NPC, GameState.GOD, GameState.AMBIENT];
     this.currentState = states[Math.floor(Math.random() * states.length)];
     if (this.stateIndicator) {
@@ -233,7 +290,7 @@ interface Response {
     const duration = action.parameters.duration || 4000;
     const targetX = action.parameters.x || parseFloat(this.npc?.getAttribute("cx")) || 0;
     const targetY = action.parameters.y || parseFloat(this.npc?.getAttribute("cy")) || 0;
-    this.animateNPCTo(targetX, targetY, duration);
+    this.moveTowards(targetX, targetY, duration);
     if (action.parameters.color) {
       this.npc?.setAttribute("fill", action.parameters.color);
     }
@@ -390,7 +447,6 @@ interface Response {
         }, 180000);
       }
     }, 1000);
-    this.updateViewBox();
     setInterval(() => {
       if (Date.now() - this.lastChunkUpdate > 1000) {
         this.updateVisibleChunks();
@@ -449,203 +505,31 @@ interface Response {
     });
   }
 
-  wander() {
-    if (!this.npc) {
-      this.initialize();
+  autonomousMove() {
+    if (!this.npc) return;
+    
+    const nearest = this.findNearestCollectible();
+    if (nearest && !nearest.collected) {
+      this.moveTowards(nearest.x, nearest.y);
       return;
     }
-
+    
+    const currentX = parseFloat(this.npc.getAttribute("cx"));
+    const currentY = parseFloat(this.npc.getAttribute("cy"));
     const angle = Math.random() * Math.PI * 2;
     const distance = Math.random() * 300 + 200;
-    const currentX = parseFloat(this.npc.getAttribute("cx")) || 0;
-    const currentY = parseFloat(this.npc.getAttribute("cy")) || 0;
-    const newX = currentX + Math.cos(angle) * distance;
-    const newY = currentY + Math.sin(angle) * distance;
-    this.animateNPCTo(newX, newY, 3000);
+    const targetX = currentX + Math.cos(angle) * distance;
+    const targetY = currentY + Math.sin(angle) * distance;
+    
+    this.moveTowards(targetX, targetY);
   }
 
   startAutonomousBehavior() {
-    if (!this.npc) {
-      this.initialize();
-    }
-
     this.autonomousInterval = setInterval(() => {
       if (Date.now() - this.lastAutonomousMove > 2000 && !this.cooldown) {
         this.autonomousMove();
       }
     }, 1000);
-  }
-
-  autonomousMove() {
-    const now = Date.now();
-    if (now - this.lastBehaviorTime < this.behaviorCooldown) return;
-
-    this.lastBehaviorTime = now;
-
-    const nearestCollectible = this.findNearestCollectible();
-
-    if (nearestCollectible && Math.random() < 0.7) {
-      this.moveToCollectible(nearestCollectible);
-    } else if (this.inventory.items.length > 0 && Math.random() < 0.3) {
-      this.placeInventoryItem();
-    } else {
-      const behaviors = [
-        { fn: () => this.explore(), weight: 2 },
-        { fn: () => this.wander(), weight: 1 },
-        { fn: () => this.orbitNearestStructure(), weight: 1 }
-      ];
-
-      const totalWeight = behaviors.reduce((sum, b) => sum + b.weight, 0);
-      let random = Math.random() * totalWeight;
-
-      for (let behavior of behaviors) {
-        random -= behavior.weight;
-        if (random <= 0) {
-          behavior.fn();
-          break;
-        }
-      }
-    }
-  }
-
-  placeInventoryItem() {
-    if (!this.npc || this.inventory.items.length === 0) return;
-
-    const item = this.inventory.items[Math.floor(Math.random() * this.inventory.items.length)];
-    const npcX = parseFloat(this.npc.getAttribute("cx"));
-    const npcY = parseFloat(this.npc.getAttribute("cy"));
-
-    const placedItem = document.createElementNS("http://www.w3.org/2000/svg", "g");
-    placedItem.innerHTML = `
-      <circle r="10" fill="${item.color}" class="placed-item" />
-      <circle r="12" fill="none" stroke="${item.color}" stroke-width="2" class="item-glow" />
-    `;
-    placedItem.setAttribute("transform", `translate(${npcX},${npcY})`);
-    this.canvas.appendChild(placedItem);
-
-    this.placedObjects.push({
-      element: placedItem,
-      x: npcX,
-      y: npcY,
-      type: item.type,
-      value: item.value,
-      color: item.color
-    });
-
-    this.inventory.removeItem(this.inventory.items.indexOf(item));
-    this.logAction(`Placed ${item.type} in space`);
-  }
-
-  findNearestCollectible() {
-    if (!this.npc) return null;
-
-    const npcX = parseFloat(this.npc.getAttribute("cx"));
-    const npcY = parseFloat(this.npc.getAttribute("cy"));
-
-    let nearest = null;
-    let minDist = Infinity;
-
-    const allCollectibles = [...this.collectibles, ...this.placedObjects]
-      .filter(obj => !obj.collected);
-
-    for (let obj of allCollectibles) {
-      const dx = obj.x - npcX;
-      const dy = obj.y - npcY;
-      const dist = Math.hypot(dx, dy);
-
-      if (dist < minDist) {
-        minDist = dist;
-        nearest = obj;
-      }
-    }
-
-    return nearest;
-  }
-
-  moveToCollectible(collectible) {
-    if (!this.npc || !collectible) return;
-
-    this.isMoving = true;
-    this.npc.setAttribute("fill", "#ffffff");
-    this.animateNPCTo(collectible.x, collectible.y, 3000);
-
-    setTimeout(() => {
-      this.isMoving = false;
-    }, 3000);
-  }
-
-  animateNPCTo(targetX, targetY, duration) {
-    if (!this.npc) return;
-
-    const startX = parseFloat(this.npc.getAttribute("cx"));
-    const startY = parseFloat(this.npc.getAttribute("cy"));
-    const startTime = performance.now();
-
-    this.isMoving = true;
-
-    const animate = (currentTime) => {
-      if (!this.npc || !this.isMoving) return;
-
-      const elapsed = currentTime - startTime;
-      const progress = Math.min(elapsed / duration, 1);
-      const easeProgress = this.easeInOutCubic(progress);
-
-      const currentX = startX + (targetX - startX) * easeProgress;
-      const currentY = startY + (targetY - startY) * easeProgress;
-
-      this.npc.setAttribute("cx", currentX);
-      this.npc.setAttribute("cy", currentY);
-
-      if (progress < 1) {
-        requestAnimationFrame(animate);
-      } else {
-        this.isMoving = false;
-      }
-    };
-
-    requestAnimationFrame(animate);
-  }
-
-  startIdleAnimation() {
-    const updateIdleState = () => {
-      this.currentColorIndex = (this.currentColorIndex + this.colorTransitionSpeed) % this.baseColors.length;
-      const color1 = this.baseColors[Math.floor(this.currentColorIndex)];
-      const color2 = this.baseColors[Math.ceil(this.currentColorIndex) % this.baseColors.length];
-      const t = this.currentColorIndex % 1;
-
-      if (this.npc) {
-        if (!this.isMoving && !this.cooldown) {
-          this.npc.setAttribute("fill", this.lerpColor(color1, color2, t));
-        }
-
-        const pulseScale = 1 + Math.sin(Date.now() / 1000) * 0.1;
-        this.npc.setAttribute("r", 20 * pulseScale);
-      }
-
-      requestAnimationFrame(updateIdleState);
-    };
-
-    requestAnimationFrame(updateIdleState);
-  }
-
-  lerpColor(color1, color2, t) {
-    const c1 = this.hexToRgb(color1);
-    const c2 = this.hexToRgb(color2);
-
-    const r = Math.round(c1.r + (c2.r - c1.r) * t);
-    const g = Math.round(c1.g + (c2.g - c1.g) * t);
-    const b = Math.round(c1.b + (c2.b - c1.b) * t);
-
-    return `rgb(${r},${g},${b})`;
-  }
-
-  hexToRgb(hex) {
-    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-    return result ? {
-      r: parseInt(result[1], 16),
-      g: parseInt(result[2], 16),
-      b: parseInt(result[3], 16)
-    } : null;
   }
 
   startCountdown(seconds) {
@@ -678,10 +562,6 @@ interface Response {
       }, 1000);
       this.startCountdown(180);
     }
-  }
-
-  easeInOutCubic(t) {
-    return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
   }
 
   initAudio() {
@@ -720,15 +600,5 @@ interface Response {
       const y = Math.random() * 10000 - 5000;
       this.spawnCollectible(x, y);
     }
-  }
-
-  updateViewBox() {
-    if (!this.npc) return;
-    const x = parseFloat(this.npc.getAttribute('cx'));
-    const y = parseFloat(this.npc.getAttribute('cy'));
-    const viewBoxWidth = window.innerWidth;
-    const viewBoxHeight = window.innerHeight;
-    this.canvas.setAttribute('viewBox', `${x - viewBoxWidth / 2} ${y - viewBoxHeight / 2} ${viewBoxWidth} ${viewBoxHeight}`);
-    requestAnimationFrame(() => this.updateViewBox());
   }
 }

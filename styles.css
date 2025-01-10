@@ -79,7 +79,7 @@ body {
   position: absolute;
   width: 40px;
   height: 40px;
-  transition: fill 0.5s ease, r 0.5s ease;
+  transition: all 2.5s cubic-bezier(0.4, 0, 0.2, 1);
   filter: drop-shadow(0 0 10px white);
   animation: pulse 2s infinite, glow 3s infinite, float 4s infinite;
 }
@@ -200,12 +200,6 @@ body {
   0% { transform: translateY(0px) scale(1); }
   50% { transform: translateY(10px) scale(1.1); }
   100% { transform: translateY(0px) scale(1); }
-}
-
-@keyframes itemGlow {
-  0% { r: 12; opacity: 0.8; }
-  50% { r: 15; opacity: 0.4; }
-  100% { r: 12; opacity: 0.8; }
 }
 
 .star {
@@ -329,12 +323,4 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-}
-
-.placed-item {
-  transition: all 0.5s ease;
-}
-
-.item-glow {
-  animation: itemGlow 2s infinite;
 }
