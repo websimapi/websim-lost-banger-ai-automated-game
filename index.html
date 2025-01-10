@@ -438,17 +438,16 @@ class Game {
     this.started = false;
     this.actionHistory = [];
     this.autonomousInterval = null;
-    this.structures = [];
+    this.chunks = new Map();
+    this.chunkSize = 1000;
+    this.loadedChunks = new Set();
+    this.lastChunkUpdate = 0;
     this.lastAutonomousMove = Date.now();
     this.audioContext = null;
     this.audioAnalyser = null;
     this.collectibles = [];
     this.inventory = new NPCInventory();
     this.crafting = new NPCCrafting(this.inventory);
-    this.chunks = new Map();
-    this.chunkSize = 1000;
-    this.loadedChunks = new Set();
-    this.lastChunkUpdate = 0;
     if (!localStorage.getItem('baseCollectibles')) {
       localStorage.setItem('baseCollectibles', JSON.stringify([{
         type: 'stardust',
@@ -475,7 +474,6 @@ class Game {
     if (this.stateIndicator) this.stateIndicator.classList.add('hidden');
     if (this.actionLog) this.actionLog.classList.add('hidden');
     if (this.countdownTimer) this.countdownTimer.classList.add('hidden');
-    this.lastAutonomousMove = Date.now();
     this.startAutonomousBehavior();
   }
   createNPC() {
