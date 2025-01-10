@@ -2,6 +2,7 @@ import { GameState } from './gameState.js';
 import { Chunk } from './chunk.js';
 import { NPCInventory } from './inventory.js';
 import { NPCCrafting } from './crafting.js';
+import { NPCAI } from './npcAI.js';
 
 export class Game {
   constructor() {
@@ -26,8 +27,10 @@ export class Game {
     this.chunkSize = 1000;
     this.visibleChunkRadius = 3;
     this.chunks = new Map();
+    this.currentPosition = { x: 0, y: 0 };
     this.targetPosition = { x: 0, y: 0 };
-    this.moveSpeed = 0.3; 
+    this.moveSpeed = 0.3;
+    this.lastFrameTime = performance.now();
     this.collectibles = [];
     this.inventory = new NPCInventory();
     this.crafting = new NPCCrafting(this.inventory, this);
@@ -38,7 +41,9 @@ export class Game {
     this.lastChunkUpdateX = null;
     this.lastChunkUpdateY = null;
     this.moveAnimation = null;
-    this.idleTimeout = 15000; 
+    this.idleTimeout = 15000;
+    this.ai = null;
+
     if (!localStorage.getItem('baseCollectibles')) {
       localStorage.setItem('baseCollectibles', JSON.stringify([{
         type: 'stardust',
@@ -319,6 +324,7 @@ export class Game {
     const viewBoxWidth = this.viewportWidth;
     const viewBoxHeight = this.viewportHeight;
     
+    // Smooth camera follow
     const viewBox = `${x - viewBoxWidth/2} ${y - viewBoxHeight/2} ${viewBoxWidth} ${viewBoxHeight}`;
     this.canvas.setAttribute('viewBox', viewBox);
 
@@ -341,76 +347,75 @@ export class Game {
     const offsetX = (Math.random() - 0.5) * 20;
     const offsetY = (Math.random() - 0.5) * 20;
     
-    const finalTargetX = targetX + offsetX;
-    const finalTargetY = targetY + offsetY;
+    this.currentPosition = { x: startX, y: startY };
+    this.targetPosition = { 
+      x: targetX + offsetX, 
+      y: targetY + offsetY 
+    };
 
     // Don't move if already very close to target
-    if (Math.abs(finalTargetX - startX) < 5 && Math.abs(finalTargetY - startY) < 5) {
+    if (Math.abs(this.targetPosition.x - startX) < 5 && 
+        Math.abs(this.targetPosition.y - startY) < 5) {
       this.isMoving = false;
       this.npc.classList.remove('npc-collecting');
-      setTimeout(() => this.checkNextAction(), 100);
+      setTimeout(() => this.ai?.think(), 100);
       return;
     }
 
-    const startTime = performance.now();
-    
-    if (this.moveAnimation) {
-      cancelAnimationFrame(this.moveAnimation);
+    this.moveAnimation = requestAnimationFrame(this.animateMovement.bind(this));
+    this.lastAutonomousMove = Date.now();
+  }
+
+  animateMovement(timestamp) {
+    const deltaTime = timestamp - (this.lastFrameTime || timestamp);
+    this.lastFrameTime = timestamp;
+
+    const dx = this.targetPosition.x - this.currentPosition.x;
+    const dy = this.targetPosition.y - this.currentPosition.y;
+    const distance = Math.hypot(dx, dy);
+
+    if (distance < 1) {
+      this.isMoving = false;
+      this.moveAnimation = null;
+      this.npc.classList.remove('npc-collecting');
+      setTimeout(() => this.ai?.think(), 100);
+      return;
     }
 
-    // Create movement trail
-    const createTrail = () => {
-      const trail = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-      trail.setAttribute("cx", this.npc.getAttribute("cx"));
-      trail.setAttribute("cy", this.npc.getAttribute("cy"));
-      trail.setAttribute("r", "3");
-      trail.classList.add('npc-trail');
-      this.canvas.appendChild(trail);
-      setTimeout(() => trail.remove(), 1000);
-    };
+    const speed = this.moveSpeed * deltaTime;
+    const moveX = (dx / distance) * speed;
+    const moveY = (dy / distance) * speed;
 
-    const animate = (currentTime) => {
-      const elapsed = currentTime - startTime;
-      const progress = Math.min(elapsed / duration, 1);
-      
-      // Smooth easing function
-      const easeProgress = progress < 0.5 
-        ? 2 * progress * progress 
-        : 1 - Math.pow(-2 * progress + 2, 2) / 2;
-      
-      const currentX = startX + (finalTargetX - startX) * easeProgress;
-      const currentY = startY + (finalTargetY - startY) * easeProgress;
-      
-      this.npc.setAttribute("cx", currentX);
-      this.npc.setAttribute("cy", currentY);
-      
-      // Create trail effect
-      if (Math.random() < 0.2) {
-        createTrail();
-      }
-      
-      this.updateCamera();
-      
-      if (progress < 1) {
-        this.moveAnimation = requestAnimationFrame(animate);
-      } else {
-        this.isMoving = false;
-        this.moveAnimation = null;
-        this.npc.classList.remove('npc-collecting');
-        setTimeout(() => this.checkNextAction(), 100);
-      }
-    };
-    
-    this.moveAnimation = requestAnimationFrame(animate);
-    this.lastAutonomousMove = Date.now();
+    this.currentPosition.x += moveX;
+    this.currentPosition.y += moveY;
+
+    this.npc.setAttribute("cx", this.currentPosition.x);
+    this.npc.setAttribute("cy", this.currentPosition.y);
+
+    // Create trail effect
+    if (Math.random() < 0.2) {
+      this.createTrail(this.currentPosition.x, this.currentPosition.y);
+    }
+
+    this.updateCamera();
+    this.moveAnimation = requestAnimationFrame(this.animateMovement.bind(this));
+  }
+
+  createTrail(x, y) {
+    const trail = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+    trail.setAttribute("cx", x);
+    trail.setAttribute("cy", y);
+    trail.setAttribute("r", "2");
+    trail.classList.add('npc-trail');
+    this.canvas.appendChild(trail);
+    setTimeout(() => trail.remove(), 1000);
   }
 
   moveTowardsCollectible(collectible) {
     if (!collectible || collectible.collected) return;
     
-    const duration = 2000;
     this.npc.classList.add('npc-collecting');
-    this.moveTowards(collectible.x, collectible.y, duration);
+    this.moveTowards(collectible.x, collectible.y);
   }
 
   autonomousMove() {
@@ -540,6 +545,11 @@ export class Game {
   startGame() {
     if (this.started) return;
     this.started = true;
+    
+    // Initialize NPC AI
+    this.ai = new NPCAI(this.npc, this);
+    
+    // Rest of startGame code...
     this.startBtn?.classList.add('hidden');
     this.skipBtn?.classList.remove('hidden');
     this.stateIndicator?.classList.remove('hidden');
@@ -550,6 +560,9 @@ export class Game {
     this.startGameLoop();
     this.startCountdown(180);
     this.inventory.show();
+    
+    // Ensure initial camera focus
+    requestAnimationFrame(() => this.updateCamera());
   }
 
   async getAIAction(state) {
