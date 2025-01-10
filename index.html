@@ -1,0 +1,226 @@
+<html><head><base href="/" />
+<title>Lost Banger - AI Automated Game</title>
+<style>
+  body {
+    margin: 0;
+    overflow: hidden;
+    background: #111;
+    font-family: monospace;
+  }
+  
+  #gameCanvas {
+    width: 100vw;
+    height: 100vh;
+  }
+  
+  #skip-btn {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: rgba(255,255,255,0.1);
+    border: 2px solid rgba(255,255,255,0.2);
+    color: white;
+    padding: 10px 20px;
+    cursor: pointer;
+    border-radius: 20px;
+    transition: all 0.3s;
+  }
+  
+  #skip-btn:hover {
+    background: rgba(255,255,255,0.2);
+  }
+  
+  #state-indicator {
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    color: white;
+    padding: 10px;
+    background: rgba(0,0,0,0.5);
+    border-radius: 10px;
+  }
+
+  .npc {
+    position: absolute;
+    width: 40px;
+    height: 40px;
+    transition: all 0.5s;
+  }
+</style>
+</head>
+<body>
+<div id="state-indicator">Current State: Initializing...</div>
+<button id="skip-btn">⏭️ Skip Cooldown</button>
+<svg id="gameCanvas"></svg>
+<audio id="bgMusic" loop>
+  <source src="/lostbanger.wav" type="audio/wav">
+</audio>
+
+<script type="module">
+// Game State Management
+const GameState = {
+  NPC: 'NPC',
+  GOD: 'GOD',
+  AMBIENT: 'AMBIENT'
+};
+
+class Game {
+  constructor() {
+    this.canvas = document.getElementById('gameCanvas');
+    this.stateIndicator = document.getElementById('state-indicator');
+    this.skipBtn = document.getElementById('skip-btn');
+    this.audio = document.getElementById('bgMusic');
+    this.currentState = null;
+    this.cooldown = false;
+    this.npc = this.createNPC();
+    
+    this.initialize();
+  }
+
+  createNPC() {
+    const npcSvg = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+    npcSvg.setAttribute("cx", "100");
+    npcSvg.setAttribute("cy", "100");
+    npcSvg.setAttribute("r", "20");
+    npcSvg.setAttribute("fill", "white");
+    this.canvas.appendChild(npcSvg);
+    return npcSvg;
+  }
+
+  initialize() {
+    // Start background music
+    this.audio.play();
+    
+    // Setup event listeners
+    this.skipBtn.addEventListener('click', () => this.skipCooldown());
+    
+    // Start the game loop
+    this.startGameLoop();
+  }
+
+  async getAIAction(state) {
+    try {
+      const response = await fetch('/api/ai_completion', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          prompt: `Generate an action for the ${state} state in the Lost Banger game.
+          
+          <typescript-interface>
+          interface Response {
+            action: string;
+            parameters: {
+              x?: number;
+              y?: number;
+              color?: string;
+              scale?: number;
+              effect?: string;
+            }
+          }
+          </typescript-interface>
+          
+          <example>
+          {
+            "action": "move",
+            "parameters": {
+              "x": 200,
+              "y": 300,
+              "color": "#FF0000"
+            }
+          }
+          </example>`,
+          data: state
+        })
+      });
+      
+      return await response.json();
+    } catch (error) {
+      console.error('AI Action Error:', error);
+      return null;
+    }
+  }
+
+  async executeState() {
+    const states = [GameState.NPC, GameState.GOD, GameState.AMBIENT];
+    this.currentState = states[Math.floor(Math.random() * states.length)];
+    this.stateIndicator.textContent = `Current State: ${this.currentState}`;
+
+    const action = await this.getAIAction(this.currentState);
+    
+    switch(this.currentState) {
+      case GameState.NPC:
+        this.handleNPCAction(action);
+        break;
+      case GameState.GOD:
+        this.handleGodAction(action);
+        break;
+      case GameState.AMBIENT:
+        this.handleAmbientAction(action);
+        break;
+    }
+  }
+
+  handleNPCAction(action) {
+    if (!action) return;
+    
+    this.npc.setAttribute("cx", action.parameters.x || 100);
+    this.npc.setAttribute("cy", action.parameters.y || 100);
+    if (action.parameters.color) {
+      this.npc.setAttribute("fill", action.parameters.color);
+    }
+  }
+
+  handleGodAction(action) {
+    if (!action) return;
+    
+    // Modify game elements based on God action
+    if (action.parameters.effect === 'invert') {
+      document.body.style.filter = 'invert(1)';
+      setTimeout(() => document.body.style.filter = '', 2000);
+    }
+  }
+
+  handleAmbientAction(action) {
+    if (!action) return;
+    
+    // Modify ambient elements
+    if (action.parameters.scale) {
+      this.canvas.style.transform = `scale(${action.parameters.scale})`;
+      setTimeout(() => this.canvas.style.transform = '', 2000);
+    }
+  }
+
+  startGameLoop() {
+    this.executeState();
+    
+    setInterval(() => {
+      if (!this.cooldown) {
+        this.cooldown = true;
+        this.executeState();
+        setTimeout(() => {
+          this.cooldown = false;
+        }, 180000); // 3 minutes
+      }
+    }, 1000);
+  }
+
+  skipCooldown() {
+    if (this.cooldown) {
+      this.cooldown = false;
+      this.skipBtn.style.opacity = '0.5';
+      this.skipBtn.disabled = true;
+      setTimeout(() => {
+        this.skipBtn.style.opacity = '1';
+        this.skipBtn.disabled = false;
+      }, 180000); // 3 minutes
+    }
+  }
+}
+
+// Initialize the game
+const game = new Game();
+</script>
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516" integrity="sha512-8DS7rgIrAmghBFwoOTujcf6D9rXvH8xm8JQ1Ja01h9QX8EzXldiszufYa4IFfKdLUKTTrnSFXLDkUEOTrZQ8Qg==" data-cf-beacon='{"version":"2024.11.0","token":"4c6229722a6346bc8eb5cb0e5eae5d41","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
+</body></html>
