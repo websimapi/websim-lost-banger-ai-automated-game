@@ -69,11 +69,23 @@
     opacity: 1;
   }
 
+  #countdown-timer {
+    position: fixed;
+    top: 20px;
+    right: 100px;
+    color: white;
+    padding: 10px 20px;
+    background: rgba(0,0,0,0.7);
+    border-radius: 20px;
+    z-index: 100;
+  }
+
   .npc {
     position: absolute;
     width: 40px;
     height: 40px;
     transition: all 1.5s cubic-bezier(0.4, 0, 0.2, 1);
+    filter: drop-shadow(0 0 10px white);
   }
 
   #start-btn {
@@ -101,6 +113,14 @@
     display: none !important;
   }
 
+  .god-active {
+    animation: godPulse 4s infinite;
+  }
+
+  .ambient-active {
+    animation: ambientFlow 8s infinite;
+  }
+
   @keyframes pulse {
     0% { r: 20; }
     50% { r: 25; }
@@ -111,6 +131,17 @@
     0% { filter: drop-shadow(0 0 5px currentColor); }
     50% { filter: drop-shadow(0 0 15px currentColor); }
     100% { filter: drop-shadow(0 0 5px currentColor); }
+  }
+
+  @keyframes godPulse {
+    0% { background: #111; }
+    50% { background: #330033; }
+    100% { background: #111; }
+  }
+
+  @keyframes ambientFlow {
+    0% { filter: hue-rotate(0deg); }
+    100% { filter: hue-rotate(360deg); }
   }
 
   .ambient-effect {
@@ -125,6 +156,7 @@
 <div id="action-log" class="hidden">Action Log:</div>
 <button id="skip-btn" class="hidden">⏭️ Skip Cooldown</button>
 <button id="start-btn">▶️ Start Experience</button>
+<div id="countdown-timer" class="hidden">Next Action: <span id="timer-value">3:00</span></div>
 <svg id="gameCanvas"></svg>
 <audio id="bgMusic" loop>
   <source src="/lostbanger.wav" type="audio/wav">
@@ -146,6 +178,9 @@ class Game {
     this.skipBtn = document.getElementById('skip-btn');
     this.startBtn = document.getElementById('start-btn');
     this.audio = document.getElementById('bgMusic');
+    this.countdownTimer = document.getElementById('countdown-timer');
+    this.timerValue = document.getElementById('timer-value');
+    this.countdownInterval = null;
     this.currentState = null;
     this.cooldown = false;
     this.npc = this.createNPC();
@@ -179,6 +214,7 @@ class Game {
     this.skipBtn.classList.add('hidden');
     this.stateIndicator.classList.add('hidden');
     this.actionLog.classList.add('hidden');
+    this.countdownTimer.classList.add('hidden');
     
     // Add ambient background elements
     this.addBackgroundElements();
@@ -203,9 +239,11 @@ class Game {
     this.skipBtn.classList.remove('hidden');
     this.stateIndicator.classList.remove('hidden');
     this.actionLog.classList.remove('hidden');
+    this.countdownTimer.classList.remove('hidden');
     
     this.audio.play().catch(e => console.log('Audio playback failed:', e));
     this.startGameLoop();
+    this.startCountdown(180);
   }
 
   async getAIAction(state) {
@@ -306,15 +344,20 @@ class Game {
 
     // Add trail effect
     if (action.parameters.pattern === 'trail') {
-      const trail = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-      trail.setAttribute("cx", this.npc.getAttribute("cx"));
-      trail.setAttribute("cy", this.npc.getAttribute("cy"));
-      trail.setAttribute("r", "5");
-      trail.setAttribute("fill", action.parameters.color || "white");
-      trail.style.opacity = "0.5";
-      this.canvas.appendChild(trail);
-      
-      setTimeout(() => trail.remove(), 2000);
+      for (let i = 0; i < 5; i++) {
+        setTimeout(() => {
+          const trail = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+          trail.setAttribute("cx", this.npc.getAttribute("cx"));
+          trail.setAttribute("cy", this.npc.getAttribute("cy"));
+          trail.setAttribute("r", "5");
+          trail.setAttribute("fill", action.parameters.color || "white");
+          trail.style.opacity = "0.5";
+          trail.style.animation = "glow 2s infinite";
+          this.canvas.appendChild(trail);
+          
+          setTimeout(() => trail.remove(), 2000);
+        }, i * 200);
+      }
     }
   }
 
@@ -336,6 +379,9 @@ class Game {
       this.canvas.style.transform = `translate(${shake}px, ${shake}px)`;
       setTimeout(() => this.canvas.style.transform = '', duration);
     }
+    
+    document.body.classList.add('god-active');
+    setTimeout(() => document.body.classList.remove('god-active'), duration);
   }
 
   handleAmbientAction(action) {
@@ -363,6 +409,9 @@ class Game {
         setTimeout(() => particle.remove(), duration);
       }
     }
+    
+    document.body.classList.add('ambient-active');
+    setTimeout(() => document.body.classList.remove('ambient-active'), duration);
   }
 
   startGameLoop() {
@@ -377,17 +426,47 @@ class Game {
         }, 180000); // 3 minutes
       }
     }, 1000);
+    
+    setInterval(() => {
+      const x = parseFloat(this.npc.getAttribute("cx"));
+      const y = parseFloat(this.npc.getAttribute("cy"));
+      this.canvas.style.transform = `translate(${window.innerWidth/2 - x}px, ${window.innerHeight/2 - y}px)`;
+    }, 100);
+  }
+
+  startCountdown(seconds) {
+    if (this.countdownInterval) {
+      clearInterval(this.countdownInterval);
+    }
+    
+    const updateTimer = () => {
+      const minutes = Math.floor(seconds / 60);
+      const remainingSeconds = seconds % 60;
+      this.timerValue.textContent = `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+    }
+    
+    updateTimer();
+    
+    this.countdownInterval = setInterval(() => {
+      seconds--;
+      updateTimer();
+      
+      if (seconds <= 0) {
+        clearInterval(this.countdownInterval);
+        this.startCountdown(180); // Reset for next cycle
+      }
+    }, 1000);
   }
 
   skipCooldown() {
     if (this.cooldown) {
       this.cooldown = false;
       this.skipBtn.style.opacity = '0.5';
-      this.skipBtn.disabled = true;
       setTimeout(() => {
         this.skipBtn.style.opacity = '1';
-        this.skipBtn.disabled = false;
-      }, 180000);
+      }, 1000);
+      // Reset countdown
+      this.startCountdown(180);
     }
   }
 }
