@@ -148,7 +148,6 @@ export class Game {
     let nearest = null;
     let minDist = Infinity;
     
-    // Only consider uncollected items 
     const activeCollectibles = this.collectibles.filter(c => !c.collected);
     
     if (activeCollectibles.length === 0) {
@@ -160,7 +159,6 @@ export class Game {
       const dy = collectible.y - npcY;
       const distance = Math.hypot(dx, dy);
       
-      // Consider all items
       if (distance < minDist) {
         minDist = distance;
         nearest = collectible;
@@ -171,22 +169,19 @@ export class Game {
   }
 
   checkNextAction() {
-    if (this.cooldown || this.isCrafting) return;
+    if (this.cooldown || this.isCrafting || this.isMoving) return;
 
-    // First priority: Check if we can craft
     if (this.inventory && this.inventory.items.length >= 2) {
       this.crafting.checkAndCraft();
       return;
     }
 
-    // Second priority: Find nearest collectible
     const nearest = this.findNearestCollectible();
     if (nearest) {
       this.moveTowardsCollectible(nearest);
       return;
     }
 
-    // Third priority: If no collectibles in range, explore new chunks
     this.exploreNewChunks();
   }
 
@@ -196,7 +191,6 @@ export class Game {
     const npcX = parseFloat(this.npc.getAttribute("cx"));
     const npcY = parseFloat(this.npc.getAttribute("cy"));
     
-    // Find direction with fewest explored chunks
     const directions = [
       {x: 1000, y: 0},
       {x: -1000, y: 0},
@@ -211,7 +205,6 @@ export class Game {
       const checkX = Math.floor((npcX + dir.x) / this.chunkSize);
       const checkY = Math.floor((npcY + dir.y) / this.chunkSize);
       
-      // Count explored chunks in this direction
       let exploredCount = 0;
       for (let i = -1; i <= 1; i++) {
         for (let j = -1; j <= 1; j++) {
@@ -229,7 +222,7 @@ export class Game {
     });
     
     if (bestDirection) {
-      this.moveTowards(npcX + bestDirection.x, npcY + bestDirection.y, 5000); // Slower movement
+      this.moveTowards(npcX + bestDirection.x, npcY + bestDirection.y, 5000);
     }
   }
 
@@ -246,7 +239,7 @@ export class Game {
     this.canvas.setAttribute('viewBox', viewBox);
 
     if (Math.abs(x - (this.lastChunkUpdateX || 0)) > 200 || 
-        Math.abs(y - (this.lastChunkUpdateY || 0))) {
+        Math.abs(y - (this.lastChunkUpdateY || 0)) > 200) {
       this.updateVisibleChunks();
       this.lastChunkUpdateX = x;
       this.lastChunkUpdateY = y;
@@ -261,11 +254,10 @@ export class Game {
     const startY = parseFloat(this.npc.getAttribute("cy"));
     const startTime = performance.now();
     
-    // Ensure we're not trying to move to our current position
     if (Math.abs(targetX - startX) < 1 && Math.abs(targetY - startY) < 1) {
       this.isMoving = false;
       this.npc.classList.remove('npc-collecting');
-      this.checkNextAction();
+      setTimeout(() => this.checkNextAction(), 0);
       return;
     }
     
@@ -273,7 +265,6 @@ export class Game {
       const elapsed = currentTime - startTime;
       const progress = Math.min(elapsed / duration, 1);
       
-      // Use easing for smoother movement
       const easeProgress = 0.5 - Math.cos(progress * Math.PI) / 2;
       
       const currentX = startX + (targetX - startX) * easeProgress;
@@ -289,7 +280,7 @@ export class Game {
         this.isMoving = false;
         this.moveAnimation = null;
         this.npc.classList.remove('npc-collecting');
-        this.checkNextAction(); // Queue up next action immediately
+        setTimeout(() => this.checkNextAction(), 0);
       }
     };
     
@@ -299,7 +290,7 @@ export class Game {
   moveTowardsCollectible(collectible) {
     if (!collectible || collectible.collected) return;
     
-    const duration = 2000; // Faster movement towards collectibles
+    const duration = 2000;
     this.npc.classList.add('npc-collecting');
     this.moveTowards(collectible.x, collectible.y, duration);
   }
@@ -319,7 +310,6 @@ export class Game {
     collectible.classList.add('collectible');
     this.canvas.appendChild(collectible);
     
-    // Store the absolute world position
     this.collectibles.push({
       element: collectible,
       x: x,
@@ -335,9 +325,8 @@ export class Game {
     
     const npcX = parseFloat(this.npc.getAttribute("cx"));
     const npcY = parseFloat(this.npc.getAttribute("cy"));
-    const pickupDistance = 40; // Slightly increased pickup range
+    const pickupDistance = 40;
 
-    // Check each collectible
     for (let i = this.collectibles.length - 1; i >= 0; i--) {
       const collectible = this.collectibles[i];
       if (!collectible.collected) {
@@ -349,7 +338,6 @@ export class Game {
           collectible.collected = true;
           collectible.element.remove();
           
-          // Add to inventory with animation
           const item = {
             type: collectible.type,
             color: '#ffff00',
@@ -360,10 +348,8 @@ export class Game {
           this.logAction(`Collected ${item.type} (${item.value})`);
           this.crafting.checkAndCraft();
           
-          // Remove from collectibles array
           this.collectibles.splice(i, 1);
           
-          // Queue up next action
           setTimeout(() => this.checkNextAction(), 100);
         }
       }
@@ -375,7 +361,6 @@ export class Game {
       clearInterval(this.autonomousInterval);
     }
 
-    // Check for actions frequently
     this.autonomousInterval = setInterval(() => {
       if (!this.cooldown) {
         this.autonomousMove();
@@ -724,7 +709,6 @@ interface Response {
       });
     }
 
-    // Occasionally spawn new collectibles in visible area
     if (Math.random() < 0.001) {
       const npcX = parseFloat(this.npc?.getAttribute("cx") || 0);
       const npcY = parseFloat(this.npc?.getAttribute("cy") || 0);
