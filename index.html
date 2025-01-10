@@ -177,11 +177,11 @@
 </style>
 </head>
 <body>
+<svg id="gameCanvas"></svg>
 <div id="state-indicator" class="hidden">Current State: Initializing...</div>
 <div id="action-log" class="hidden">Action Log:</div>
 <button id="skip-btn" class="hidden">&#x23ed;&#xfe0f; Skip Cooldown <span id="timer-value">3:00</span></button>
 <button id="start-btn">&#x25b6;&#xfe0f; Start Experience</button>
-<svg id="gameCanvas"/>
 <div id="countdown-timer" class="hidden"></div>
 <audio id="bgMusic" loop>
   <source src="/lostbanger.wav" type="audio/wav">
@@ -194,14 +194,71 @@
 };
 class Game {
   constructor() {
-    this.canvas = document.getElementById('gameCanvas') || document.createElement('svg');
-    this.stateIndicator = document.getElementById('state-indicator') || document.createElement('div');
-    this.actionLog = document.getElementById('action-log') || document.createElement('div');
-    this.skipBtn = document.getElementById('skip-btn') || document.createElement('button');
-    this.startBtn = document.getElementById('start-btn') || document.createElement('button');
-    this.audio = document.getElementById('bgMusic') || document.createElement('audio');
-    this.countdownTimer = document.getElementById('countdown-timer') || document.createElement('div');
-    this.timerValue = document.getElementById('timer-value') || document.createElement('span');
+    // Create elements if they don't exist
+    if (!document.getElementById('gameCanvas')) {
+      const canvas = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      canvas.id = 'gameCanvas';
+      document.body.appendChild(canvas);
+    }
+    
+    if (!document.getElementById('state-indicator')) {
+      const indicator = document.createElement('div');
+      indicator.id = 'state-indicator';
+      indicator.classList.add('hidden');
+      document.body.appendChild(indicator);
+    }
+
+    if (!document.getElementById('action-log')) {
+      const log = document.createElement('div');
+      log.id = 'action-log';
+      log.classList.add('hidden');
+      document.body.appendChild(log); 
+    }
+
+    if (!document.getElementById('skip-btn')) {
+      const skipBtn = document.createElement('button');
+      skipBtn.id = 'skip-btn';
+      skipBtn.classList.add('hidden');
+      skipBtn.innerHTML = '&#x23ed;&#xfe0f; Skip Cooldown <span id="timer-value">3:00</span>';
+      document.body.appendChild(skipBtn);
+    }
+
+    if (!document.getElementById('start-btn')) {
+      const startBtn = document.createElement('button');
+      startBtn.id = 'start-btn';
+      startBtn.innerHTML = '&#x25b6;&#xfe0f; Start Experience';
+      document.body.appendChild(startBtn);
+    }
+
+    if (!document.getElementById('bgMusic')) {
+      const audio = document.createElement('audio');
+      audio.id = 'bgMusic';
+      audio.loop = true;
+      const source = document.createElement('source');
+      source.src = '/lostbanger.wav';
+      source.type = 'audio/wav';
+      audio.appendChild(source);
+      document.body.appendChild(audio);
+    }
+
+    if (!document.getElementById('countdown-timer')) {
+      const timer = document.createElement('div');
+      timer.id = 'countdown-timer';
+      timer.classList.add('hidden');
+      document.body.appendChild(timer);
+    }
+
+    // Now assign the elements after ensuring they exist
+    this.canvas = document.getElementById('gameCanvas');
+    this.stateIndicator = document.getElementById('state-indicator');
+    this.actionLog = document.getElementById('action-log');
+    this.skipBtn = document.getElementById('skip-btn');
+    this.startBtn = document.getElementById('start-btn');
+    this.audio = document.getElementById('bgMusic');
+    this.countdownTimer = document.getElementById('countdown-timer');
+    this.timerValue = document.getElementById('timer-value');
+
+    // Rest of constructor remains same
     this.countdownInterval = null;
     this.currentState = null;
     this.cooldown = false;
@@ -236,14 +293,15 @@ class Game {
     if (this.skipBtn) {
       this.skipBtn.addEventListener('click', () => this.skipCooldown());
     }
+    
     if (this.startBtn) {
       this.startBtn.addEventListener('click', () => this.startGame());
     }
-    
-    this.skipBtn?.classList.add('hidden');
-    this.stateIndicator?.classList.add('hidden');  
-    this.actionLog?.classList.add('hidden');
-    this.countdownTimer?.classList.add('hidden');
+
+    if (this.skipBtn) this.skipBtn.classList.add('hidden');
+    if (this.stateIndicator) this.stateIndicator.classList.add('hidden');
+    if (this.actionLog) this.actionLog.classList.add('hidden');
+    if (this.countdownTimer) this.countdownTimer.classList.add('hidden');
 
     this.addBackgroundElements();
   }
