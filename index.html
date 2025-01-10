@@ -171,13 +171,39 @@
     100% { opacity: 0.3; }
   }
 
+  @keyframes starPulse {
+    0% { opacity: 0.3; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.5); }
+    100% { opacity: 0.3; transform: scale(1); }
+  }
+
+  @keyframes starRainbow {
+    0% { fill: #ff0000; }
+    33% { fill: #00ff00; }
+    66% { fill: #0000ff; }
+    100% { fill: #ff0000; }
+  }
+
   .star {
     animation: twinkle 3s infinite;
+  }
+
+  .star-active {
+    animation: starPulse 0.5s infinite;
+  }
+
+  .star-rainbow {
+    animation: starRainbow 2s infinite;
+  }
+
+  .collectible {
+    filter: drop-shadow(0 0 10px gold);
+    animation: glow 2s infinite;
   }
 </style>
 </head>
 <body>
-<svg id="gameCanvas"></svg>
+<svg id="gameCanvas"/>
 <div id="state-indicator" class="hidden">Current State: Initializing...</div>
 <div id="action-log" class="hidden">Action Log:</div>
 <button id="skip-btn" class="hidden">&#x23ed;&#xfe0f; Skip Cooldown <span id="timer-value">3:00</span></button>
@@ -194,27 +220,23 @@
 };
 class Game {
   constructor() {
-    // Create elements if they don't exist
     if (!document.getElementById('gameCanvas')) {
       const canvas = document.createElementNS("http://www.w3.org/2000/svg", "svg");
       canvas.id = 'gameCanvas';
       document.body.appendChild(canvas);
     }
-    
     if (!document.getElementById('state-indicator')) {
       const indicator = document.createElement('div');
       indicator.id = 'state-indicator';
       indicator.classList.add('hidden');
       document.body.appendChild(indicator);
     }
-
     if (!document.getElementById('action-log')) {
       const log = document.createElement('div');
       log.id = 'action-log';
       log.classList.add('hidden');
-      document.body.appendChild(log); 
+      document.body.appendChild(log);
     }
-
     if (!document.getElementById('skip-btn')) {
       const skipBtn = document.createElement('button');
       skipBtn.id = 'skip-btn';
@@ -222,14 +244,12 @@ class Game {
       skipBtn.innerHTML = '&#x23ed;&#xfe0f; Skip Cooldown <span id="timer-value">3:00</span>';
       document.body.appendChild(skipBtn);
     }
-
     if (!document.getElementById('start-btn')) {
       const startBtn = document.createElement('button');
       startBtn.id = 'start-btn';
       startBtn.innerHTML = '&#x25b6;&#xfe0f; Start Experience';
       document.body.appendChild(startBtn);
     }
-
     if (!document.getElementById('bgMusic')) {
       const audio = document.createElement('audio');
       audio.id = 'bgMusic';
@@ -240,15 +260,12 @@ class Game {
       audio.appendChild(source);
       document.body.appendChild(audio);
     }
-
     if (!document.getElementById('countdown-timer')) {
       const timer = document.createElement('div');
       timer.id = 'countdown-timer';
       timer.classList.add('hidden');
       document.body.appendChild(timer);
     }
-
-    // Now assign the elements after ensuring they exist
     this.canvas = document.getElementById('gameCanvas');
     this.stateIndicator = document.getElementById('state-indicator');
     this.actionLog = document.getElementById('action-log');
@@ -257,8 +274,6 @@ class Game {
     this.audio = document.getElementById('bgMusic');
     this.countdownTimer = document.getElementById('countdown-timer');
     this.timerValue = document.getElementById('timer-value');
-
-    // Rest of constructor remains same
     this.countdownInterval = null;
     this.currentState = null;
     this.cooldown = false;
@@ -268,11 +283,13 @@ class Game {
     this.autonomousInterval = null;
     this.structures = [];
     this.lastAutonomousMove = Date.now();
+    this.audioContext = null;
+    this.audioAnalyser = null;
+    this.collectibles = [];
     this.initialize();
   }
   createNPC() {
     if (!this.canvas) return null;
-
     const npcSvg = document.createElementNS("http://www.w3.org/2000/svg", "circle");
     npcSvg.setAttribute("cx", window.innerWidth / 2);
     npcSvg.setAttribute("cy", window.innerHeight / 2);
@@ -284,7 +301,6 @@ class Game {
   }
   logAction(action) {
     if (!this.actionLog) return;
-    
     this.actionHistory.unshift(`[${new Date().toLocaleTimeString()}] ${action}`);
     if (this.actionHistory.length > 10) this.actionHistory.pop();
     this.actionLog.innerHTML = this.actionHistory.join('<br>');
@@ -293,16 +309,13 @@ class Game {
     if (this.skipBtn) {
       this.skipBtn.addEventListener('click', () => this.skipCooldown());
     }
-    
     if (this.startBtn) {
       this.startBtn.addEventListener('click', () => this.startGame());
     }
-
     if (this.skipBtn) this.skipBtn.classList.add('hidden');
     if (this.stateIndicator) this.stateIndicator.classList.add('hidden');
     if (this.actionLog) this.actionLog.classList.add('hidden');
     if (this.countdownTimer) this.countdownTimer.classList.add('hidden');
-
     this.addBackgroundElements();
   }
   addBackgroundElements() {
@@ -327,15 +340,13 @@ class Game {
   startGame() {
     if (this.started) return;
     this.started = true;
-    
     this.startBtn?.classList.add('hidden');
     this.skipBtn?.classList.remove('hidden');
     this.stateIndicator?.classList.remove('hidden');
-    this.actionLog?.classList.remove('hidden'); 
+    this.actionLog?.classList.remove('hidden');
     this.countdownTimer?.classList.remove('hidden');
-
     this.audio?.play().catch(e => console.log('Audio playback failed:', e));
-
+    this.initAudio();
     this.startGameLoop();
     this.startCountdown(180);
     this.startAutonomousBehavior();
@@ -500,6 +511,9 @@ interface Response {
       }
     };
     implementPastIdea();
+    if (Math.random() < 0.3) {
+      this.spawnCollectible(action.parameters.x || window.innerWidth / 2, action.parameters.y || window.innerHeight / 2);
+    }
   }
   handleAmbientAction(action) {
     if (!action) return;
@@ -543,17 +557,14 @@ interface Response {
   }
   startCountdown(seconds) {
     if (!this.timerValue) return;
-    
     if (this.countdownInterval) {
       clearInterval(this.countdownInterval);
     }
-
     const updateTimer = () => {
       const minutes = Math.floor(seconds / 60);
       const remainingSeconds = seconds % 60;
       this.timerValue.textContent = `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
     };
-
     updateTimer();
     this.countdownInterval = setInterval(() => {
       seconds--;
@@ -582,9 +593,28 @@ interface Response {
     }, 1000);
   }
   autonomousMove() {
-    const movements = [this.wander.bind(this), this.explore.bind(this), this.interactWithStructure.bind(this)];
-    const selectedMove = movements[Math.floor(Math.random() * movements.length)];
-    selectedMove();
+    const movements = [{
+      fn: this.wander.bind(this),
+      weight: 1
+    }, {
+      fn: this.explore.bind(this),
+      weight: 2
+    }, {
+      fn: this.interactWithStructure.bind(this),
+      weight: 2
+    }, {
+      fn: this.seekCollectible.bind(this),
+      weight: 3
+    }];
+    const totalWeight = movements.reduce((sum, m) => sum + m.weight, 0);
+    let random = Math.random() * totalWeight;
+    for (let movement of movements) {
+      random -= movement.weight;
+      if (random <= 0) {
+        movement.fn();
+        break;
+      }
+    }
     this.lastAutonomousMove = Date.now();
   }
   wander() {
@@ -620,6 +650,31 @@ interface Response {
   findNearestStructure() {
     if (!this.structures.length) return null;
     return this.structures[0];
+  }
+  initAudio() {
+    this.audioContext = new AudioContext();
+    this.audioAnalyser = this.audioContext.createAnalyser();
+    const source = this.audioContext.createMediaElementSource(this.audio);
+    source.connect(this.audioAnalyser);
+    this.audioAnalyser.connect(this.audioContext.destination);
+  }
+  spawnCollectible(x, y) {
+    const collectible = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+    collectible.setAttribute("cx", x);
+    collectible.setAttribute("cy", y);
+    collectible.setAttribute("r", 10);
+    collectible.setAttribute("fill", "yellow");
+    this.canvas.appendChild(collectible);
+    this.collectibles.push(collectible);
+  }
+  seekCollectible() {
+    if (!this.collectibles.length) return;
+    const target = this.collectibles[0];
+    const rect = target.getBoundingClientRect();
+    this.npc.setAttribute("cx", rect.x + rect.width / 2);
+    this.npc.setAttribute("cy", rect.y + rect.height / 2);
+    target.remove();
+    this.collectibles.shift();
   }
 }
 const game = new Game();</script>
