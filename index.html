@@ -46,11 +46,35 @@
     height: 40px;
     transition: all 0.5s;
   }
+
+  #start-btn {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(255,255,255,0.2);
+    border: 2px solid rgba(255,255,255,0.3);
+    color: white;
+    padding: 20px 40px;
+    cursor: pointer;
+    border-radius: 30px;
+    font-size: 1.2em;
+    transition: all 0.3s;
+  }
+
+  #start-btn:hover {
+    background: rgba(255,255,255,0.3);
+  }
+
+  .hidden {
+    display: none !important;
+  }
 </style>
 </head>
 <body>
-<div id="state-indicator">Current State: Initializing...</div>
-<button id="skip-btn">⏭️ Skip Cooldown</button>
+<div id="state-indicator" class="hidden">Current State: Initializing...</div>
+<button id="skip-btn" class="hidden">⏭️ Skip Cooldown</button>
+<button id="start-btn">▶️ Start Experience</button>
 <svg id="gameCanvas"></svg>
 <audio id="bgMusic" loop>
   <source src="/lostbanger.wav" type="audio/wav">
@@ -69,10 +93,12 @@ class Game {
     this.canvas = document.getElementById('gameCanvas');
     this.stateIndicator = document.getElementById('state-indicator');
     this.skipBtn = document.getElementById('skip-btn');
+    this.startBtn = document.getElementById('start-btn');
     this.audio = document.getElementById('bgMusic');
     this.currentState = null;
     this.cooldown = false;
     this.npc = this.createNPC();
+    this.started = false;
     
     this.initialize();
   }
@@ -88,11 +114,25 @@ class Game {
   }
 
   initialize() {
-    // Start background music
-    this.audio.play();
-    
     // Setup event listeners
     this.skipBtn.addEventListener('click', () => this.skipCooldown());
+    this.startBtn.addEventListener('click', () => this.startGame());
+    
+    // Hide skip button initially
+    this.skipBtn.classList.add('hidden');
+    this.stateIndicator.classList.add('hidden');
+  }
+
+  startGame() {
+    if (this.started) return;
+    
+    this.started = true;
+    this.startBtn.classList.add('hidden');
+    this.skipBtn.classList.remove('hidden');
+    this.stateIndicator.classList.remove('hidden');
+    
+    // Start background music
+    this.audio.play().catch(e => console.log('Audio playback failed:', e));
     
     // Start the game loop
     this.startGameLoop();
