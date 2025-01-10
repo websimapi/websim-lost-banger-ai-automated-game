@@ -171,58 +171,168 @@ export class Game {
   checkNextAction() {
     if (this.cooldown || this.isCrafting || this.isMoving) return;
 
-    if (this.inventory && this.inventory.items.length >= 2) {
-      this.crafting.checkAndCraft();
+    // Check if it's been idle too long
+    if (Date.now() - this.lastAutonomousMove > this.idleTimeout) {
+      this.exploreNewChunks();
       return;
     }
 
+    // Get current priorities
+    const priorities = this.evaluateActionPriorities();
+    const highestPriority = Math.max(...Object.values(priorities));
+    
+    // Execute highest priority action
+    if (priorities.collect === highestPriority && this.inventory.items.length < this.inventory.maxSize) {
+      this.collectNearestStardust();
+    } else if (priorities.craft === highestPriority) {
+      this.crafting.checkAndCraft();
+    } else if (priorities.place === highestPriority) {
+      this.placeCreation();
+    } else if (priorities.explore === highestPriority) {
+      this.exploreStructures();
+    } else {
+      this.exploreNewChunks();
+    }
+  }
+
+  evaluateActionPriorities() {
+    const priorities = {
+      collect: 0,
+      craft: 0,
+      place: 0,
+      explore: 0
+    };
+
+    // Evaluate collection priority
+    const nearestCollectible = this.findNearestCollectible();
+    if (nearestCollectible) {
+      const distance = this.getDistanceToCollectible(nearestCollectible);
+      priorities.collect = Math.max(0, 100 - distance / 10);
+    }
+
+    // Evaluate crafting priority
+    if (this.inventory.items.length >= 2) {
+      const canCraftSomething = this.crafting.recipes.some(recipe => this.crafting.canCraft(recipe));
+      if (canCraftSomething) {
+        priorities.craft = 80 + this.inventory.items.length * 5;
+      }
+    }
+
+    // Evaluate placing priority
+    const hasCraftedItems = this.inventory.items.some(item => 
+      item.type.includes('Essence') || item.type.includes('Time'));
+    if (hasCraftedItems) {
+      priorities.place = 70;
+    }
+
+    // Evaluate exploration priority
+    priorities.explore = Math.min(60, Math.floor((Date.now() - this.lastAutonomousMove) / 1000));
+
+    return priorities;
+  }
+
+  getDistanceToCollectible(collectible) {
+    if (!collectible || !this.npc) return Infinity;
+    const npcX = parseFloat(this.npc.getAttribute("cx"));
+    const npcY = parseFloat(this.npc.getAttribute("cy"));
+    return Math.hypot(collectible.x - npcX, collectible.y - npcY);
+  }
+
+  collectNearestStardust() {
     const nearest = this.findNearestCollectible();
     if (nearest) {
       this.moveTowardsCollectible(nearest);
-      return;
+    } else {
+      this.exploreNewChunks();
     }
-
-    this.exploreNewChunks();
   }
 
-  exploreNewChunks() {
-    if (!this.npc) return;
+  placeCreation() {
+    if (!this.npc || this.isMoving) return;
+
+    const craftedItem = this.inventory.items.find(item => 
+      item.type.includes('Essence') || item.type.includes('Time'));
     
+    if (craftedItem) {
+      const npcX = parseFloat(this.npc.getAttribute("cx"));
+      const npcY = parseFloat(this.npc.getAttribute("cy"));
+      
+      // Find a suitable placement location
+      const angle = Math.random() * Math.PI * 2;
+      const distance = 100 + Math.random() * 200;
+      const placeX = npcX + Math.cos(angle) * distance;
+      const placeY = npcY + Math.sin(angle) * distance;
+
+      // Create the structure
+      const structure = document.createElementNS("http://www.w3.org/2000/svg", "g");
+      structure.classList.add('god-structure');
+      
+      // Different structures based on item type
+      if (craftedItem.type.includes('Star')) {
+        structure.innerHTML = `
+          <circle r="20" fill="none" stroke="${craftedItem.color}" stroke-width="2">
+            <animate attributeName="r" values="20;25;20" dur="3s" repeatCount="indefinite"/>
+          </circle>`;
+      } else if (craftedItem.type.includes('Time')) {
+        structure.innerHTML = `
+          <path d="M-20,-20 L20,20 M-20,20 L20,-20" stroke="${craftedItem.color}"/>
+          <circle r="25" fill="none" stroke="${craftedItem.color}" stroke-width="1">
+            <animate attributeName="stroke-dasharray" values="1,150;150,1" dur="15s" repeatCount="indefinite"/>
+          </circle>`;
+      }
+
+      structure.setAttribute('transform', `translate(${placeX},${placeY})`);
+      this.canvas.appendChild(structure);
+      this.structures.push(structure);
+
+      // Remove item from inventory
+      const itemIndex = this.inventory.items.findIndex(item => item === craftedItem);
+      if (itemIndex !== -1) {
+        this.inventory.removeItem(itemIndex);
+      }
+
+      this.logAction(`Placed ${craftedItem.type} structure`);
+    }
+  }
+
+  exploreStructures() {
+    if (!this.npc || this.structures.length === 0) return;
+
+    // Find nearest unexplored structure
     const npcX = parseFloat(this.npc.getAttribute("cx"));
     const npcY = parseFloat(this.npc.getAttribute("cy"));
     
-    const directions = [
-      {x: 1000, y: 0},
-      {x: -1000, y: 0},
-      {x: 0, y: 1000},
-      {x: 0, y: -1000}
-    ];
-    
-    let bestDirection = null;
-    let leastExplored = Infinity;
-    
-    directions.forEach(dir => {
-      const checkX = Math.floor((npcX + dir.x) / this.chunkSize);
-      const checkY = Math.floor((npcY + dir.y) / this.chunkSize);
-      
-      let exploredCount = 0;
-      for (let i = -1; i <= 1; i++) {
-        for (let j = -1; j <= 1; j++) {
-          const key = `${checkX + i},${checkY + j}`;
-          if (this.chunks.has(key)) {
-            exploredCount++;
+    let nearestStructure = null;
+    let minDistance = Infinity;
+
+    this.structures.forEach(structure => {
+      if (!structure.explored) {
+        const structureTransform = structure.getAttribute('transform');
+        const match = structureTransform.match(/translate\(([^,]+),([^)]+)\)/);
+        if (match) {
+          const structX = parseFloat(match[1]);
+          const structY = parseFloat(match[2]);
+          const distance = Math.hypot(structX - npcX, structY - npcY);
+          if (distance < minDistance) {
+            minDistance = distance;
+            nearestStructure = structure;
           }
         }
       }
-      
-      if (exploredCount < leastExplored) {
-        leastExplored = exploredCount;
-        bestDirection = dir;
-      }
     });
-    
-    if (bestDirection) {
-      this.moveTowards(npcX + bestDirection.x, npcY + bestDirection.y, 5000);
+
+    if (nearestStructure) {
+      const transform = nearestStructure.getAttribute('transform');
+      const match = transform.match(/translate\(([^,]+),([^)]+)\)/);
+      if (match) {
+        const targetX = parseFloat(match[1]);
+        const targetY = parseFloat(match[2]);
+        this.moveTowards(targetX, targetY);
+        nearestStructure.explored = true;
+        this.logAction('Exploring cosmic structure');
+      }
+    } else {
+      this.exploreNewChunks();
     }
   }
 
@@ -257,10 +367,14 @@ export class Game {
     if (Math.abs(targetX - startX) < 1 && Math.abs(targetY - startY) < 1) {
       this.isMoving = false;
       this.npc.classList.remove('npc-collecting');
-      setTimeout(() => this.checkNextAction(), 0);
+      setTimeout(() => this.checkNextAction(), 100);
       return;
     }
     
+    if (this.moveAnimation) {
+      cancelAnimationFrame(this.moveAnimation);
+    }
+
     const animate = (currentTime) => {
       const elapsed = currentTime - startTime;
       const progress = Math.min(elapsed / duration, 1);
@@ -280,11 +394,12 @@ export class Game {
         this.isMoving = false;
         this.moveAnimation = null;
         this.npc.classList.remove('npc-collecting');
-        setTimeout(() => this.checkNextAction(), 0);
+        setTimeout(() => this.checkNextAction(), 100);
       }
     };
     
     this.moveAnimation = requestAnimationFrame(animate);
+    this.lastAutonomousMove = Date.now();
   }
 
   moveTowardsCollectible(collectible) {
@@ -716,6 +831,47 @@ interface Response {
       const x = npcX + (Math.random() - 0.5) * spread;
       const y = npcY + (Math.random() - 0.5) * spread;
       this.spawnCollectible(x, y);
+    }
+  }
+
+  exploreNewChunks() {
+    if (!this.npc) return;
+    
+    const npcX = parseFloat(this.npc.getAttribute("cx"));
+    const npcY = parseFloat(this.npc.getAttribute("cy"));
+    
+    const directions = [
+      {x: 1000, y: 0},
+      {x: -1000, y: 0},
+      {x: 0, y: 1000},
+      {x: 0, y: -1000}
+    ];
+    
+    let bestDirection = null;
+    let leastExplored = Infinity;
+    
+    directions.forEach(dir => {
+      const checkX = Math.floor((npcX + dir.x) / this.chunkSize);
+      const checkY = Math.floor((npcY + dir.y) / this.chunkSize);
+      
+      let exploredCount = 0;
+      for (let i = -1; i <= 1; i++) {
+        for (let j = -1; j <= 1; j++) {
+          const key = `${checkX + i},${checkY + j}`;
+          if (this.chunks.has(key)) {
+            exploredCount++;
+          }
+        }
+      }
+      
+      if (exploredCount < leastExplored) {
+        leastExplored = exploredCount;
+        bestDirection = dir;
+      }
+    });
+    
+    if (bestDirection) {
+      this.moveTowards(npcX + bestDirection.x, npcY + bestDirection.y, 5000);
     }
   }
 }

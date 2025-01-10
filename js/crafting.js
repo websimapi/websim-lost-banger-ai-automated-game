@@ -33,10 +33,13 @@ export class NPCCrafting {
   }
 
   canCraft(recipe) {
+    if (this.isCrafting) return false;
+    
     const itemCounts = {};
     this.inventory.items.forEach(item => {
       itemCounts[item.type] = (itemCounts[item.type] || 0) + 1;
     });
+    
     return recipe.inputs.every(input => {
       return (itemCounts[input] || 0) > 0;
     });
