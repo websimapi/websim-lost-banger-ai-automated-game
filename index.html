@@ -1,4 +1,4 @@
-<html><head><base href="/" />
+<html><head><base href="/">
 <title>Lost Banger - AI Automated Game</title>
 <style>
   body {
@@ -27,6 +27,10 @@
     border-radius: 20px;
     transition: all 0.3s;
     z-index: 100;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 120px;
   }
   
   #skip-btn:hover {
@@ -70,14 +74,7 @@
   }
 
   #countdown-timer {
-    position: fixed;
-    top: 20px;
-    right: 100px;
-    color: white;
-    padding: 10px 20px;
-    background: rgba(0,0,0,0.7);
-    border-radius: 20px;
-    z-index: 100;
+    display: none;
   }
 
   .npc {
@@ -154,22 +151,18 @@
 <body>
 <div id="state-indicator" class="hidden">Current State: Initializing...</div>
 <div id="action-log" class="hidden">Action Log:</div>
-<button id="skip-btn" class="hidden">⏭️ Skip Cooldown</button>
-<button id="start-btn">▶️ Start Experience</button>
-<div id="countdown-timer" class="hidden">Next Action: <span id="timer-value">3:00</span></div>
-<svg id="gameCanvas"></svg>
+<button id="skip-btn" class="hidden">&#x23ed;&#xfe0f; Skip Cooldown <span id="timer-value">3:00</span></button>
+<button id="start-btn">&#x25b6;&#xfe0f; Start Experience</button>
+<svg id="gameCanvas"/>
 <audio id="bgMusic" loop>
   <source src="/lostbanger.wav" type="audio/wav">
 </audio>
 
-<script type="module">
-// Game State Management
-const GameState = {
+<script type="module">const GameState = {
   NPC: 'NPC',
   GOD: 'GOD',
   AMBIENT: 'AMBIENT'
 };
-
 class Game {
   constructor() {
     this.canvas = document.getElementById('gameCanvas');
@@ -186,66 +179,62 @@ class Game {
     this.npc = this.createNPC();
     this.started = false;
     this.actionHistory = [];
-    
     this.initialize();
   }
-
   createNPC() {
     const npcSvg = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-    npcSvg.setAttribute("cx", "100");
-    npcSvg.setAttribute("cy", "100");
+    npcSvg.setAttribute("cx", window.innerWidth / 2);
+    npcSvg.setAttribute("cy", window.innerHeight / 2);
     npcSvg.setAttribute("r", "20");
     npcSvg.setAttribute("fill", "white");
     npcSvg.style.animation = "pulse 2s infinite, glow 3s infinite";
     this.canvas.appendChild(npcSvg);
     return npcSvg;
   }
-
   logAction(action) {
     this.actionHistory.unshift(`[${new Date().toLocaleTimeString()}] ${action}`);
     if (this.actionHistory.length > 10) this.actionHistory.pop();
     this.actionLog.innerHTML = this.actionHistory.join('<br>');
   }
-
   initialize() {
     this.skipBtn.addEventListener('click', () => this.skipCooldown());
     this.startBtn.addEventListener('click', () => this.startGame());
-    
     this.skipBtn.classList.add('hidden');
     this.stateIndicator.classList.add('hidden');
     this.actionLog.classList.add('hidden');
     this.countdownTimer.classList.add('hidden');
-    
-    // Add ambient background elements
     this.addBackgroundElements();
   }
-
   addBackgroundElements() {
-    for (let i = 0; i < 20; i++) {
+    const createStar = () => {
       const star = document.createElementNS("http://www.w3.org/2000/svg", "circle");
       star.setAttribute("cx", Math.random() * window.innerWidth);
       star.setAttribute("cy", Math.random() * window.innerHeight);
       star.setAttribute("r", Math.random() * 2 + 1);
       star.setAttribute("fill", `rgba(255,255,255,${Math.random() * 0.5 + 0.5})`);
       this.canvas.appendChild(star);
+    };
+    for (let i = 0; i < 50; i++) {
+      createStar();
     }
+    setInterval(() => {
+      if (this.canvas.childElementCount < 200) {
+        createStar();
+      }
+    }, 1000);
   }
-
   startGame() {
     if (this.started) return;
-    
     this.started = true;
     this.startBtn.classList.add('hidden');
     this.skipBtn.classList.remove('hidden');
     this.stateIndicator.classList.remove('hidden');
     this.actionLog.classList.remove('hidden');
     this.countdownTimer.classList.remove('hidden');
-    
     this.audio.play().catch(e => console.log('Audio playback failed:', e));
     this.startGameLoop();
     this.startCountdown(180);
   }
-
   async getAIAction(state) {
     try {
       const response = await fetch('/api/ai_completion', {
@@ -294,28 +283,21 @@ class Game {
           }
         })
       });
-      
       return await response.json();
     } catch (error) {
       console.error('AI Action Error:', error);
       return null;
     }
   }
-
   async executeState() {
     const states = [GameState.NPC, GameState.GOD, GameState.AMBIENT];
     this.currentState = states[Math.floor(Math.random() * states.length)];
     this.stateIndicator.textContent = `Current State: ${this.currentState}`;
-    this.stateIndicator.style.background = 
-      this.currentState === GameState.NPC ? 'rgba(0,255,255,0.3)' :
-      this.currentState === GameState.GOD ? 'rgba(255,0,255,0.3)' :
-      'rgba(255,255,0,0.3)';
-
+    this.stateIndicator.style.background = this.currentState === GameState.NPC ? 'rgba(0,255,255,0.3)' : this.currentState === GameState.GOD ? 'rgba(255,0,255,0.3)' : 'rgba(255,255,0,0.3)';
     const action = await this.getAIAction(this.currentState);
     if (action) {
       this.logAction(`${this.currentState}: ${action.description}`);
-      
-      switch(this.currentState) {
+      switch (this.currentState) {
         case GameState.NPC:
           this.handleNPCAction(action);
           break;
@@ -328,21 +310,14 @@ class Game {
       }
     }
   }
-
   handleNPCAction(action) {
     if (!action) return;
-    
-    // Smooth transition to new position
     this.npc.style.transition = `all ${(action.parameters.duration || 3000) / 1000}s cubic-bezier(0.4, 0, 0.2, 1)`;
-    
     this.npc.setAttribute("cx", action.parameters.x || 100);
     this.npc.setAttribute("cy", action.parameters.y || 100);
-    
     if (action.parameters.color) {
       this.npc.setAttribute("fill", action.parameters.color);
     }
-
-    // Add trail effect
     if (action.parameters.pattern === 'trail') {
       for (let i = 0; i < 5; i++) {
         setTimeout(() => {
@@ -354,18 +329,44 @@ class Game {
           trail.style.opacity = "0.5";
           trail.style.animation = "glow 2s infinite";
           this.canvas.appendChild(trail);
-          
           setTimeout(() => trail.remove(), 2000);
         }, i * 200);
       }
     }
   }
-
   handleGodAction(action) {
     if (!action) return;
-    
     const duration = action.parameters.duration || 3000;
-    
+    let godIdeas = JSON.parse(localStorage.getItem('godIdeas') || '[]');
+    godIdeas.push({
+      timestamp: Date.now(),
+      action: action,
+      implemented: false
+    });
+    localStorage.setItem('godIdeas', JSON.stringify(godIdeas));
+    const implementPastIdea = () => {
+      const unimplementedIdeas = godIdeas.filter(idea => !idea.implemented);
+      if (unimplementedIdeas.length > 0) {
+        const idea = unimplementedIdeas[Math.floor(Math.random() * unimplementedIdeas.length)];
+        const element = document.createElementNS("http://www.w3.org/2000/svg", "g");
+        const patterns = ['spiral', 'orbit', 'pulse', 'wave'];
+        const pattern = patterns[Math.floor(Math.random() * patterns.length)];
+        switch (pattern) {
+          case 'spiral':
+            for (let i = 0; i < 10; i++) {
+              const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+              circle.setAttribute("r", 5);
+              circle.setAttribute("fill", idea.action.parameters.color || "#fff");
+              circle.style.animation = `spiral${i} ${duration}ms infinite`;
+              element.appendChild(circle);
+            }
+            break;
+        }
+        this.canvas.appendChild(element);
+        idea.implemented = true;
+        localStorage.setItem('godIdeas', JSON.stringify(godIdeas));
+      }
+    };
     if (action.parameters.effect === 'invert') {
       document.body.style.filter = 'invert(1)';
       setTimeout(() => document.body.style.filter = '', duration);
@@ -373,28 +374,22 @@ class Game {
       document.body.style.animation = `hue-rotate ${duration}ms linear`;
       setTimeout(() => document.body.style.animation = '', duration);
     }
-    
     if (action.parameters.intensity) {
       const shake = Math.min(action.parameters.intensity * 20, 50);
       this.canvas.style.transform = `translate(${shake}px, ${shake}px)`;
       setTimeout(() => this.canvas.style.transform = '', duration);
     }
-    
     document.body.classList.add('god-active');
     setTimeout(() => document.body.classList.remove('god-active'), duration);
+    implementPastIdea();
   }
-
   handleAmbientAction(action) {
     if (!action) return;
-    
     const duration = action.parameters.duration || 3000;
-    
     if (action.parameters.scale) {
       this.canvas.style.transform = `scale(${action.parameters.scale})`;
       setTimeout(() => this.canvas.style.transform = '', duration);
     }
-    
-    // Create floating particles
     if (action.parameters.pattern === 'particles') {
       for (let i = 0; i < 10; i++) {
         const particle = document.createElement('div');
@@ -405,59 +400,48 @@ class Game {
         particle.style.left = Math.random() * window.innerWidth + 'px';
         particle.style.top = Math.random() * window.innerHeight + 'px';
         document.body.appendChild(particle);
-        
         setTimeout(() => particle.remove(), duration);
       }
     }
-    
     document.body.classList.add('ambient-active');
     setTimeout(() => document.body.classList.remove('ambient-active'), duration);
   }
-
   startGameLoop() {
     this.executeState();
-    
     setInterval(() => {
       if (!this.cooldown) {
         this.cooldown = true;
         this.executeState();
         setTimeout(() => {
           this.cooldown = false;
-        }, 180000); // 3 minutes
+        }, 180000);
       }
     }, 1000);
-    
     setInterval(() => {
       const x = parseFloat(this.npc.getAttribute("cx"));
       const y = parseFloat(this.npc.getAttribute("cy"));
-      this.canvas.style.transform = `translate(${window.innerWidth/2 - x}px, ${window.innerHeight/2 - y}px)`;
+      this.canvas.style.transform = `translate(${window.innerWidth / 2 - x}px, ${window.innerHeight / 2 - y}px)`;
     }, 100);
   }
-
   startCountdown(seconds) {
     if (this.countdownInterval) {
       clearInterval(this.countdownInterval);
     }
-    
     const updateTimer = () => {
       const minutes = Math.floor(seconds / 60);
       const remainingSeconds = seconds % 60;
       this.timerValue.textContent = `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
-    }
-    
+    };
     updateTimer();
-    
     this.countdownInterval = setInterval(() => {
       seconds--;
       updateTimer();
-      
       if (seconds <= 0) {
         clearInterval(this.countdownInterval);
-        this.startCountdown(180); // Reset for next cycle
+        this.startCountdown(180);
       }
     }, 1000);
   }
-
   skipCooldown() {
     if (this.cooldown) {
       this.cooldown = false;
@@ -465,14 +449,10 @@ class Game {
       setTimeout(() => {
         this.skipBtn.style.opacity = '1';
       }, 1000);
-      // Reset countdown
       this.startCountdown(180);
     }
   }
 }
-
-// Initialize the game
-const game = new Game();
-</script>
+const game = new Game();</script>
 <script defer src="https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516" integrity="sha512-8DS7rgIrAmghBFwoOTujcf6D9rXvH8xm8JQ1Ja01h9QX8EzXldiszufYa4IFfKdLUKTTrnSFXLDkUEOTrZQ8Qg==" data-cf-beacon='{"version":"2024.11.0","token":"4c6229722a6346bc8eb5cb0e5eae5d41","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
 </body></html>
