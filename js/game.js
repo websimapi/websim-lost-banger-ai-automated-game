@@ -582,11 +582,39 @@ export class Game {
     if (this.started) return;
     
     this.started = true;
-    this.canvas.style.visibility = 'visible';
+    
+    // Show UI elements
+    [
+      this.skipBtn,
+      this.stateIndicator,
+      this.actionLog,
+      this.countdownTimer,
+      document.querySelector('.toggle-container'),
+      document.querySelector('.action-queue')
+    ].forEach(element => {
+      if (element) {
+        element.classList.remove('hidden');
+      }
+    });
+    
+    // Hide start button
+    if (this.startBtn) {
+      this.startBtn.classList.add('hidden');
+    }
+    
+    // Show and initialize game canvas
+    if (this.canvas) {
+      this.canvas.style.visibility = 'visible';
+      this.canvas.style.position = 'fixed';
+      this.canvas.style.top = '0';
+      this.canvas.style.left = '0';
+      this.canvas.style.zIndex = '1';
+    }
     
     this.initialize();
     this.inventory.show();
     
+    // Start audio
     this.audio?.play().catch(e => console.log('Audio playback failed:', e));
     this.initAudio();
     
@@ -594,6 +622,7 @@ export class Game {
     this.startCountdown(180);
     this.scheduleNextAction();
 
+    // Initialize NPC position
     if (this.npc) {
       this.npc.setAttribute("cx", "0");
       this.npc.setAttribute("cy", "0");
@@ -1015,15 +1044,33 @@ interface Response {
   }
 
   initializeUI() {
-    this.skipBtn?.classList.add('hidden');
-    this.stateIndicator?.classList.add('hidden');
-    this.actionLog?.classList.add('hidden');
-    this.countdownTimer?.classList.add('hidden');
+    // Hide all UI elements except start button
+    [
+      this.skipBtn,
+      this.stateIndicator,
+      this.actionLog,
+      this.countdownTimer,
+      document.querySelector('.toggle-container'),
+      document.querySelector('.action-queue'),
+      document.getElementById('npc-inventory')
+    ].forEach(element => {
+      if (element) {
+        element.classList.add('hidden');
+      }
+    });
     
-    const inventory = document.getElementById('npc-inventory');
-    if (inventory) inventory.classList.add('hidden');
+    if (this.startBtn) {
+      this.startBtn.classList.remove('hidden');
+      // Ensure start button is clickable
+      this.startBtn.style.zIndex = '1000';
+      this.startBtn.style.position = 'relative';
+    }
     
-    this.canvas.innerHTML = '';
+    // Clear the canvas
+    if (this.canvas) {
+      this.canvas.innerHTML = '';
+      this.canvas.style.visibility = 'hidden';
+    }
   }
 
   spawnCollectible(x, y) {

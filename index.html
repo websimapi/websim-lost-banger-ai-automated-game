@@ -406,31 +406,37 @@
   </style>
 </head>
 <body>
-  <svg id="gameCanvas" viewBox="-5000 -5000 10000 10000" style="visibility: hidden">
+  <svg id="gameCanvas" viewBox="-5000 -5000 10000 10000" style="visibility: hidden; position: absolute;">
   </svg>
-  <div id="state-indicator">Current State: Initializing...</div>
-  <div id="action-log">Action Log:</div>
-  <button id="skip-btn">&#x23ed;&#xfe0f; Skip Cooldown <span id="timer-value">3:00</span></button>
-  <button id="start-btn">&#x25b6;&#xfe0f; Start Experience</button>
-  <div id="countdown-timer"></div>
+  
+  <!-- UI Elements - Moved after SVG -->
+  <div id="state-indicator" class="hidden">Current State: Initializing...</div>
+  <div id="action-log" class="hidden">Action Log:</div>
+  <button id="skip-btn" class="hidden">&#x23ed;&#xfe0f; Skip Cooldown <span id="timer-value">3:00</span></button>
+  <button id="start-btn" class="start-btn">&#x25b6;&#xfe0f; Start Experience</button>
+  <div id="countdown-timer" class="hidden"></div>
+  
   <div id="npc-inventory" class="npc-inventory hidden">
     <h3>Inventory</h3>
     <div id="inventory-items"></div>
   </div>
-  <div class="toggle-container">
+  
+  <div class="toggle-container hidden">
     <label class="toggle-switch">
       <input type="checkbox" id="prevent-idle-toggle" checked>
       <span class="toggle-slider round"></span>
     </label>
     <span>Prevent Idle NPC</span>
   </div>
-  <div id="action-queue" class="action-queue">
+  
+  <div id="action-queue" class="action-queue hidden">
     <h4>Action Queue</h4>
     <div class="priority-list"></div>
-    <div class="current-action"></div>
+    <div class="current-action">Waiting to start...</div>
     <button class="force-action-btn" id="force-action-btn">Force New Action</button>
   </div>
-  <div id="npc-crafting" class="npc-crafting">
+  
+  <div id="npc-crafting" class="npc-crafting hidden">
     <h3>Crafting</h3>
     <div id="craft-progress">
       <div id="craft-bar"></div>

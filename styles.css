@@ -11,6 +11,7 @@ body {
   height: 100vh;
   transition: all 1.2s cubic-bezier(0.4, 0, 0.2, 1);
   background: transparent;
+  z-index: 1;
 }
 
 #skip-btn {
@@ -29,6 +30,7 @@ body {
   align-items: center;
   gap: 10px;
   min-width: 120px;
+  pointer-events: auto;
 }
 
 #skip-btn:hover {
@@ -88,25 +90,26 @@ body {
   transition: all 1.5s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-#start-btn {
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  background: rgba(255,255,255,0.2);
-  border: 2px solid rgba(255,255,255,0.3);
-  color: white;
-  padding: 20px 40px;
-  cursor: pointer;
-  border-radius: 30px;
-  font-size: 1.2em;
-  transition: all 0.3s;
-  z-index: 100;
+.start-btn {
+  position: fixed !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  background: rgba(255,255,255,0.2) !important;
+  border: 2px solid rgba(255,255,255,0.3) !important;
+  color: white !important;
+  padding: 20px 40px !important;
+  cursor: pointer !important;
+  border-radius: 30px !important;
+  font-size: 1.2em !important;
+  transition: all 0.3s !important;
+  z-index: 1000 !important;
+  pointer-events: auto !important;
 }
 
-#start-btn:hover {
-  background: rgba(255,255,255,0.3);
-  transform: translate(-50%, -50%) scale(1.1);
+.start-btn:hover {
+  background: rgba(255,255,255,0.3) !important;
+  transform: translate(-50%, -50%) scale(1.1) !important;
 }
 
 .hidden {
@@ -263,6 +266,7 @@ body {
   color: white;
   font-family: monospace;
   z-index: 100;
+  pointer-events: auto;
 }
 
 .npc-inventory-item {
@@ -339,6 +343,7 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
+  pointer-events: auto;
 }
 
 .toggle-switch {
@@ -399,6 +404,7 @@ input:checked + .toggle-slider:before {
   z-index: 100;
   min-width: 200px;
   max-width: 300px;
+  pointer-events: auto;
 }
 
 .priority-list {
@@ -438,4 +444,11 @@ input:checked + .toggle-slider:before {
 .force-action-btn:hover {
   background: rgba(255,255,255,0.2);
   transform: scale(1.05);
+}
+
+button, 
+.toggle-container, 
+.action-queue,
+.npc-inventory {
+  pointer-events: auto;
 }
