@@ -184,6 +184,18 @@
     100% { fill: #ff0000; }
   }
 
+  @keyframes spaceStorm {
+    0% { background: linear-gradient(45deg, #111 0%, #330066 50%, #111 100%); }
+    50% { background: linear-gradient(45deg, #330066 0%, #111 50%, #330066 100%); }
+    100% { background: linear-gradient(45deg, #111 0%, #330066 50%, #111 100%); }
+  }
+
+  @keyframes starAudioPulse {
+    0% { r: 1; opacity: 0.3; }
+    50% { r: 3; opacity: 1; }
+    100% { r: 1; opacity: 0.3; }
+  }
+
   .star {
     animation: twinkle 3s infinite;
   }
@@ -287,6 +299,21 @@ class Game {
     this.audioAnalyser = null;
     this.collectibles = [];
     this.initialize();
+    if (!localStorage.getItem('baseCollectibles')) {
+      localStorage.setItem('baseCollectibles', JSON.stringify([{
+        type: 'stardust',
+        color: '#00ffff',
+        value: 10
+      }, {
+        type: 'cosmicShard',
+        color: '#ff00ff',
+        value: 20
+      }, {
+        type: 'voidEssence',
+        color: '#ffff00',
+        value: 30
+      }]));
+    }
   }
   createNPC() {
     if (!this.canvas) return null;
@@ -518,12 +545,11 @@ interface Response {
   handleAmbientAction(action) {
     if (!action) return;
     const duration = action.parameters.duration || 3000;
-    if (action.parameters.scale) {
-      this.canvas.style.transform = `scale(${action.parameters.scale})`;
-      setTimeout(() => this.canvas.style.transform = '', duration);
-    }
+    const effects = ['spaceStorm', 'nebulaMist', 'solarWind', 'cosmicRain'];
+    const effect = effects[Math.floor(Math.random() * effects.length)];
+    document.body.style.animation = `${effect} ${duration}ms ease-in-out`;
     if (action.parameters.pattern === 'particles') {
-      for (let i = 0; i < 10; i++) {
+      for (let i = 0; i < 30; i++) {
         const particle = document.createElement('div');
         particle.className = 'ambient-effect';
         particle.style.width = '10px';
@@ -531,12 +557,22 @@ interface Response {
         particle.style.background = action.parameters.color || '#fff';
         particle.style.left = Math.random() * window.innerWidth + 'px';
         particle.style.top = Math.random() * window.innerHeight + 'px';
+        particle.style.filter = `blur(${Math.random() * 5}px)`;
         document.body.appendChild(particle);
+        const angle = Math.random() * Math.PI * 2;
+        const speed = Math.random() * 100 + 50;
+        particle.style.transform = `translate(
+          ${Math.cos(angle) * speed}px,
+          ${Math.sin(angle) * speed}px
+        )`;
         setTimeout(() => particle.remove(), duration);
       }
     }
     document.body.classList.add('ambient-active');
-    setTimeout(() => document.body.classList.remove('ambient-active'), duration);
+    setTimeout(() => {
+      document.body.classList.remove('ambient-active');
+      document.body.style.animation = '';
+    }, duration);
   }
   startGameLoop() {
     this.executeState();
@@ -605,6 +641,12 @@ interface Response {
     }, {
       fn: this.seekCollectible.bind(this),
       weight: 3
+    }, {
+      fn: this.orbitNearestStructure.bind(this),
+      weight: 2
+    }, {
+      fn: this.investigateBrightStar.bind(this),
+      weight: 2
     }];
     const totalWeight = movements.reduce((sum, m) => sum + m.weight, 0);
     let random = Math.random() * totalWeight;
@@ -657,6 +699,31 @@ interface Response {
     const source = this.audioContext.createMediaElementSource(this.audio);
     source.connect(this.audioAnalyser);
     this.audioAnalyser.connect(this.audioContext.destination);
+    this.audioAnalyser.fftSize = 256;
+    this.audioData = new Uint8Array(this.audioAnalyser.frequencyBinCount);
+    this.visualizeAudio();
+  }
+  visualizeAudio() {
+    const stars = document.querySelectorAll('.star');
+    this.audioAnalyser.getByteFrequencyData(this.audioData);
+    stars.forEach((star, i) => {
+      const audioIndex = i % this.audioData.length;
+      const audioValue = this.audioData[audioIndex] / 255;
+      if (audioValue > 0.8) {
+        star.style.animation = 'starAudioPulse 0.5s infinite';
+        if (Math.random() < 0.001) {
+          star.classList.add('star-rainbow');
+          setTimeout(() => {
+            const rect = star.getBoundingClientRect();
+            this.spawnCollectible(rect.x, rect.y);
+            star.classList.remove('star-rainbow');
+          }, 2000);
+        }
+      } else {
+        star.style.animation = 'twinkle 3s infinite';
+      }
+    });
+    requestAnimationFrame(() => this.visualizeAudio());
   }
   spawnCollectible(x, y) {
     const collectible = document.createElementNS("http://www.w3.org/2000/svg", "circle");
@@ -675,6 +742,27 @@ interface Response {
     this.npc.setAttribute("cy", rect.y + rect.height / 2);
     target.remove();
     this.collectibles.shift();
+  }
+  orbitNearestStructure() {
+    const structure = this.findNearestStructure();
+    if (structure) {
+      const rect = structure.getBoundingClientRect();
+      const time = Date.now() / 1000;
+      const radius = 100;
+      const centerX = rect.x + rect.width / 2;
+      const centerY = rect.y + rect.height / 2;
+      this.npc.setAttribute("cx", centerX + Math.cos(time) * radius);
+      this.npc.setAttribute("cy", centerY + Math.sin(time) * radius);
+    }
+  }
+  investigateBrightStar() {
+    const rainbowStars = document.querySelectorAll('.star-rainbow');
+    if (rainbowStars.length > 0) {
+      const star = rainbowStars[Math.floor(Math.random() * rainbowStars.length)];
+      const rect = star.getBoundingClientRect();
+      this.npc.setAttribute("cx", rect.x);
+      this.npc.setAttribute("cy", rect.y);
+    }
   }
 }
 const game = new Game();</script>
