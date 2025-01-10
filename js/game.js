@@ -60,7 +60,18 @@ export class Game {
     this.stateIndicator?.classList.add('hidden');
     this.actionLog?.classList.add('hidden');
     this.countdownTimer?.classList.add('hidden');
-    this.startAutonomousBehavior();
+    this.targetPosition = { x: 0, y: 0 };
+    this.currentPosition = { x: 0, y: 0 };
+    this.movementSpeed = 0.5; // Lower = slower movement
+    this.isMoving = false;
+    this.lastBehaviorTime = Date.now();
+    this.behaviorCooldown = 2000; // Time between autonomous behaviors
+    this.placedObjects = [];
+    this.baseColors = ['#ffffff', '#88ffff', '#ff88ff', '#ffff88'];
+    this.currentColorIndex = 0;
+    this.colorTransitionSpeed = 0.01;
+
+    this.startIdleAnimation();
   }
 
   createNPC() {
@@ -439,7 +450,6 @@ interface Response {
   }
 
   wander() {
-    // Guard clause to ensure NPC exists
     if (!this.npc) {
       this.initialize();
       return;
@@ -455,129 +465,187 @@ interface Response {
   }
 
   startAutonomousBehavior() {
-    // Ensure NPC is initialized
     if (!this.npc) {
       this.initialize();
     }
 
     this.autonomousInterval = setInterval(() => {
       if (Date.now() - this.lastAutonomousMove > 2000 && !this.cooldown) {
-        if (this.collectibles.length > 0) {
-          this.moveToNearestCollectible();
-        } else {
-          this.autonomousMove();
-        }
+        this.autonomousMove();
       }
     }, 1000);
   }
 
   autonomousMove() {
-    // Guard clause to ensure NPC exists
-    if (!this.npc) {
-      this.initialize();
-      return;
-    }
+    const now = Date.now();
+    if (now - this.lastBehaviorTime < this.behaviorCooldown) return;
 
-    const movements = [{
-      fn: this.wander.bind(this),
-      weight: 1,
-      cooldown: 2000
-    }, {
-      fn: this.explore.bind(this),
-      weight: 1,
-      cooldown: 5000
-    }, {
-      fn: this.moveToNearestCollectible.bind(this),
-      weight: 5,
-      cooldown: 2000
-    }, {
-      fn: this.interactWithStructure.bind(this),
-      weight: 1,
-      cooldown: 6000
-    }, {
-      fn: this.seekCollectible.bind(this),
-      weight: 4,
-      cooldown: 3000
-    }, {
-      fn: this.orbitNearestStructure.bind(this),
-      weight: 1,
-      cooldown: 7000
-    }, {
-      fn: () => {
-        if (this.inventory.items.length >= 2 && Math.random() < 0.2) {
-          this.crafting.checkAndCraft();
+    this.lastBehaviorTime = now;
+
+    const nearestCollectible = this.findNearestCollectible();
+
+    if (nearestCollectible && Math.random() < 0.7) {
+      this.moveToCollectible(nearestCollectible);
+    } else if (this.inventory.items.length > 0 && Math.random() < 0.3) {
+      this.placeInventoryItem();
+    } else {
+      const behaviors = [
+        { fn: () => this.explore(), weight: 2 },
+        { fn: () => this.wander(), weight: 1 },
+        { fn: () => this.orbitNearestStructure(), weight: 1 }
+      ];
+
+      const totalWeight = behaviors.reduce((sum, b) => sum + b.weight, 0);
+      let random = Math.random() * totalWeight;
+
+      for (let behavior of behaviors) {
+        random -= behavior.weight;
+        if (random <= 0) {
+          behavior.fn();
+          break;
         }
-      },
-      weight: 1,
-      cooldown: 10000
-    }];
-
-    // Add safety checks for all methods that depend on NPC position
-    const safeMethods = movements.map(m => ({
-      ...m,
-      fn: () => {
-        if (this.npc) {
-          m.fn();
-        } else {
-          this.initialize();
-        }
-      }
-    }));
-
-    const totalWeight = safeMethods.reduce((sum, m) => sum + m.weight, 0);
-    let random = Math.random() * totalWeight;
-
-    for (let movement of safeMethods) {
-      random -= movement.weight;
-      if (random <= 0) {
-        try {
-          movement.fn();
-          this.lastAutonomousMove = Date.now() + movement.cooldown;
-        } catch (error) {
-          console.error('Error in autonomous movement:', error);
-          // If there's an error, try to recover by reinitializing
-          this.initialize();
-        }
-        break;
       }
     }
   }
 
-  animateNPCTo(targetX, targetY, duration) {
-    // Guard clause to ensure NPC exists
-    if (!this.npc) {
-      this.initialize();
-      return;
+  placeInventoryItem() {
+    if (!this.npc || this.inventory.items.length === 0) return;
+
+    const item = this.inventory.items[Math.floor(Math.random() * this.inventory.items.length)];
+    const npcX = parseFloat(this.npc.getAttribute("cx"));
+    const npcY = parseFloat(this.npc.getAttribute("cy"));
+
+    const placedItem = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    placedItem.innerHTML = `
+      <circle r="10" fill="${item.color}" class="placed-item" />
+      <circle r="12" fill="none" stroke="${item.color}" stroke-width="2" class="item-glow" />
+    `;
+    placedItem.setAttribute("transform", `translate(${npcX},${npcY})`);
+    this.canvas.appendChild(placedItem);
+
+    this.placedObjects.push({
+      element: placedItem,
+      x: npcX,
+      y: npcY,
+      type: item.type,
+      value: item.value,
+      color: item.color
+    });
+
+    this.inventory.removeItem(this.inventory.items.indexOf(item));
+    this.logAction(`Placed ${item.type} in space`);
+  }
+
+  findNearestCollectible() {
+    if (!this.npc) return null;
+
+    const npcX = parseFloat(this.npc.getAttribute("cx"));
+    const npcY = parseFloat(this.npc.getAttribute("cy"));
+
+    let nearest = null;
+    let minDist = Infinity;
+
+    const allCollectibles = [...this.collectibles, ...this.placedObjects]
+      .filter(obj => !obj.collected);
+
+    for (let obj of allCollectibles) {
+      const dx = obj.x - npcX;
+      const dy = obj.y - npcY;
+      const dist = Math.hypot(dx, dy);
+
+      if (dist < minDist) {
+        minDist = dist;
+        nearest = obj;
+      }
     }
 
-    const startX = parseFloat(this.npc.getAttribute("cx")) || 0;
-    const startY = parseFloat(this.npc.getAttribute("cy")) || 0;
-    const deltaX = targetX - startX;
-    const deltaY = targetY - startY;
+    return nearest;
+  }
+
+  moveToCollectible(collectible) {
+    if (!this.npc || !collectible) return;
+
+    this.isMoving = true;
+    this.npc.setAttribute("fill", "#ffffff");
+    this.animateNPCTo(collectible.x, collectible.y, 3000);
+
+    setTimeout(() => {
+      this.isMoving = false;
+    }, 3000);
+  }
+
+  animateNPCTo(targetX, targetY, duration) {
+    if (!this.npc) return;
+
+    const startX = parseFloat(this.npc.getAttribute("cx"));
+    const startY = parseFloat(this.npc.getAttribute("cy"));
     const startTime = performance.now();
 
-    const animate = currentTime => {
-      if (!this.npc) return; // Stop animation if NPC is gone
+    this.isMoving = true;
+
+    const animate = (currentTime) => {
+      if (!this.npc || !this.isMoving) return;
 
       const elapsed = currentTime - startTime;
       const progress = Math.min(elapsed / duration, 1);
       const easeProgress = this.easeInOutCubic(progress);
-      const currentX = startX + deltaX * easeProgress;
-      const currentY = startY + deltaY * easeProgress;
+
+      const currentX = startX + (targetX - startX) * easeProgress;
+      const currentY = startY + (targetY - startY) * easeProgress;
 
       this.npc.setAttribute("cx", currentX);
       this.npc.setAttribute("cy", currentY);
 
       if (progress < 1) {
         requestAnimationFrame(animate);
+      } else {
+        this.isMoving = false;
       }
     };
 
     requestAnimationFrame(animate);
   }
 
-  easeInOutCubic(t) {
-    return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+  startIdleAnimation() {
+    const updateIdleState = () => {
+      this.currentColorIndex = (this.currentColorIndex + this.colorTransitionSpeed) % this.baseColors.length;
+      const color1 = this.baseColors[Math.floor(this.currentColorIndex)];
+      const color2 = this.baseColors[Math.ceil(this.currentColorIndex) % this.baseColors.length];
+      const t = this.currentColorIndex % 1;
+
+      if (this.npc) {
+        if (!this.isMoving && !this.cooldown) {
+          this.npc.setAttribute("fill", this.lerpColor(color1, color2, t));
+        }
+
+        const pulseScale = 1 + Math.sin(Date.now() / 1000) * 0.1;
+        this.npc.setAttribute("r", 20 * pulseScale);
+      }
+
+      requestAnimationFrame(updateIdleState);
+    };
+
+    requestAnimationFrame(updateIdleState);
+  }
+
+  lerpColor(color1, color2, t) {
+    const c1 = this.hexToRgb(color1);
+    const c2 = this.hexToRgb(color2);
+
+    const r = Math.round(c1.r + (c2.r - c1.r) * t);
+    const g = Math.round(c1.g + (c2.g - c1.g) * t);
+    const b = Math.round(c1.b + (c2.b - c1.b) * t);
+
+    return `rgb(${r},${g},${b})`;
+  }
+
+  hexToRgb(hex) {
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return result ? {
+      r: parseInt(result[1], 16),
+      g: parseInt(result[2], 16),
+      b: parseInt(result[3], 16)
+    } : null;
   }
 
   startCountdown(seconds) {
@@ -612,156 +680,8 @@ interface Response {
     }
   }
 
-  moveToNearestCollectible() {
-    if (this.collectibles.length === 0) return;
-    let nearest = null;
-    let minDist = Infinity;
-    const npcX = parseFloat(this.npc?.getAttribute("cx")) || 0;
-    const npcY = parseFloat(this.npc?.getAttribute("cy")) || 0;
-    this.collectibles.forEach(collectible => {
-      if (!collectible.collected) {
-        const dx = collectible.x - npcX;
-        const dy = collectible.y - npcY;
-        const distance = Math.hypot(dx, dy);
-        if (distance < minDist) {
-          minDist = distance;
-          nearest = collectible;
-        }
-      }
-    });
-    if (nearest) {
-      this.npc.classList.add('npc-collecting');
-      this.animateNPCTo(nearest.x, nearest.y, 2000);
-      setTimeout(() => {
-        if (nearest && !nearest.collected) {
-          nearest.collected = true;
-          nearest.element.remove();
-          this.collectibles.splice(this.collectibles.indexOf(nearest), 1);
-          const baseItems = JSON.parse(localStorage.getItem('baseCollectibles'));
-          if (baseItems && baseItems.length) {
-            const randomItem = baseItems[Math.floor(Math.random() * baseItems.length)];
-            this.inventory.addItem(randomItem);
-            this.logAction(`Collected ${randomItem.type}`);
-            this.crafting.checkAndCraft();
-          }
-        }
-        this.npc.classList.remove('npc-collecting');
-      }, 2100);
-    }
-  }
-
-  explore() {
-    if (this.structures.length === 0) {
-      this.wander();
-      return;
-    }
-    const target = this.structures[Math.floor(Math.random() * this.structures.length)];
-    if (target) {
-      const transform = target.getAttribute('transform');
-      const coords = transform.match(/translate\(([-+]?\d*\.?\d+),\s*([-+]?\d*\.?\d+)\)/);
-      if (coords) {
-        const newX = parseFloat(coords[1]);
-        const newY = parseFloat(coords[2]);
-        this.animateNPCTo(newX, newY, 3000);
-      } else {
-        this.wander();
-      }
-    } else {
-      this.wander();
-    }
-  }
-
-  interactWithStructure() {
-    const nearestStructure = this.findNearestStructure();
-    if (nearestStructure) {
-      const transform = nearestStructure.getAttribute('transform');
-      const coords = transform.match(/translate\(([-+]?\d*\.?\d+),\s*([-+]?\d*\.?\d+)\)/);
-      if (coords) {
-        const structureX = parseFloat(coords[1]);
-        const structureY = parseFloat(coords[2]);
-        const angle = Date.now() / 1000;
-        const radius = 50;
-        const newX = structureX + Math.cos(angle) * radius;
-        const newY = structureY + Math.sin(angle) * radius;
-        this.animateNPCTo(newX, newY, 2000);
-      }
-    }
-  }
-
-  findNearestStructure() {
-    if (!this.structures.length) return null;
-    let nearest = null;
-    let minDist = Infinity;
-    const npcX = parseFloat(this.npc?.getAttribute("cx")) || 0;
-    const npcY = parseFloat(this.npc?.getAttribute("cy")) || 0;
-    for (let structure of this.structures) {
-      const transform = structure.getAttribute('transform');
-      const coords = transform.match(/translate\(([-+]?\d*\.?\d+),\s*([-+]?\d*\.?\d+)\)/);
-      if (coords) {
-        const x = parseFloat(coords[1]);
-        const y = parseFloat(coords[2]);
-        const dist = Math.hypot(x - npcX, y - npcY);
-        if (dist < minDist) {
-          minDist = dist;
-          nearest = structure;
-        }
-      }
-    }
-    return nearest;
-  }
-
-  orbitNearestStructure() {
-    const structure = this.findNearestStructure();
-    if (structure) {
-      const transform = structure.getAttribute('transform');
-      const coords = transform.match(/translate\(([-+]?\d*\.?\d+),\s*([-+]?\d*\.?\d+)\)/);
-      if (coords) {
-        const centerX = parseFloat(coords[1]);
-        const centerY = parseFloat(coords[2]);
-        const time = Date.now() / 1000;
-        const radius = 100;
-        const newX = centerX + Math.cos(time) * radius;
-        const newY = centerY + Math.sin(time) * radius;
-        this.animateNPCTo(newX, newY, 3000);
-      }
-    }
-  }
-
-  investigateBrightStar() {
-    const rainbowStars = document.querySelectorAll('.star-rainbow');
-    if (rainbowStars.length > 0) {
-      const star = rainbowStars[Math.floor(Math.random() * rainbowStars.length)];
-      const cx = parseFloat(star.getAttribute("cx")) + parseFloat(this.canvas.getAttribute('viewBox').split(' ')[0]) + window.innerWidth / 2;
-      const cy = parseFloat(star.getAttribute("cy")) + parseFloat(this.canvas.getAttribute('viewBox').split(' ')[1]) + window.innerHeight / 2;
-      this.animateNPCTo(cx, cy, 3000);
-    }
-  }
-
-  seekCollectible() {
-    if (!this.collectibles.length) return;
-    const target = this.collectibles[0];
-    const cx = parseFloat(target.element.getAttribute("cx"));
-    const cy = parseFloat(target.element.getAttribute("cy"));
-    this.npc.classList.add('npc-collecting');
-    const trail = document.createElement('div');
-    trail.className = 'npc-trail';
-    trail.style.left = `${cx}px`;
-    trail.style.top = `${cy}px`;
-    document.body.appendChild(trail);
-    this.animateNPCTo(cx, cy, 2000);
-    setTimeout(() => {
-      this.npc.classList.remove('npc-collecting');
-      target.element.remove();
-      this.collectibles.shift();
-      trail.remove();
-      const baseItems = JSON.parse(localStorage.getItem('baseCollectibles'));
-      if (baseItems && baseItems.length) {
-        const randomItem = baseItems[Math.floor(Math.random() * baseItems.length)];
-        this.inventory.addItem(randomItem);
-        this.logAction(`Collected ${randomItem.type}`);
-        this.crafting.checkAndCraft();
-      }
-    }, 2500);
+  easeInOutCubic(t) {
+    return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
   }
 
   initAudio() {
