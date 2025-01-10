@@ -324,3 +324,36 @@ body {
   align-items: center;
   justify-content: center;
 }
+
+.action-queue {
+  position: fixed;
+  bottom: 20px;
+  right: 200px;
+  background: rgba(0,0,0,0.7);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 10px;
+  padding: 15px;
+  color: white;
+  font-family: monospace;
+  z-index: 100;
+  min-width: 200px;
+  max-width: 300px;
+}
+
+.priority-list {
+  font-size: 0.9em;
+  line-height: 1.4;
+  margin-bottom: 10px;
+}
+
+.current-action {
+  padding-top: 10px;
+  border-top: 1px solid rgba(255,255,255,0.1);
+  font-weight: bold;
+  color: #00ff00;
+}
+
+.action-queue h4 {
+  margin: 0 0 10px 0;
+  color: #88ff88;
+}

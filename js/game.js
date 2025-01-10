@@ -63,6 +63,33 @@ export class Game {
     if (this.startBtn) {
       this.startBtn.addEventListener('click', () => this.startGame());
     }
+
+    this.actionQueue = [];
+    this.queueDisplay = document.getElementById('action-queue');
+    this.actionPriorities = {
+      collect: 0,
+      craft: 0,
+      place: 0,
+      explore: 0,
+      investigate: 0
+    };
+    
+    // Action cooldowns in milliseconds
+    this.actionCooldowns = {
+      collect: 3000,
+      craft: 5000,
+      place: 4000,
+      explore: 6000,
+      investigate: 4000
+    };
+    
+    this.lastActionTimes = {
+      collect: 0,
+      craft: 0,
+      place: 0,
+      explore: 0,
+      investigate: 0
+    };
   }
 
   createNPC() {
@@ -152,22 +179,23 @@ export class Game {
       collect: 0,
       craft: 0,
       place: 0,
+      explore: 0,
       investigate: 0
     };
 
-    // Evaluate collection priority
+    // Collection priority
     const nearestCollectible = this.findNearestCollectible();
     if (nearestCollectible) {
       const distance = this.getDistanceToCollectible(nearestCollectible);
       priorities.collect = Math.max(0, 100 - distance / 10);
       
-      // Higher priority when inventory is low
+      // Boost collection priority when inventory is low
       if (this.inventory.items.length < 3) {
         priorities.collect += 50;
       }
     }
 
-    // Evaluate crafting priority
+    // Crafting priority
     if (this.inventory.items.length >= 2) {
       const canCraft = this.crafting.recipes.some(recipe => 
         this.crafting.canCraft(recipe)
@@ -177,29 +205,34 @@ export class Game {
       }
     }
 
-    // Evaluate placing priority
+    // Placing priority
     if (this.inventory.items.some(item => 
       item.type.includes('Essence') || item.type.includes('Time')
     )) {
       priorities.place = 40;
     }
 
-    // Evaluate investigation priority
-    if (this.structures.some(s => !s.explored)) {
-      priorities.investigate = 20;
+    // Investigation priority
+    const unexploredStructures = this.structures.filter(s => !s.explored);
+    if (unexploredStructures.length > 0) {
+      priorities.investigate = 20 + (unexploredStructures.length * 5);
     }
 
-    // Adjust priorities based on recent actions
-    const lastAction = this.actionHistory[0];
-    if (lastAction) {
-      const actionType = lastAction.toLowerCase();
-      Object.keys(priorities).forEach(key => {
-        if (actionType.includes(key)) {
-          priorities[key] *= 0.5; // Reduce priority of recent actions
-        }
-      });
+    // Exploration priority (when other priorities are low)
+    if (Object.values(priorities).every(p => p < 30)) {
+      priorities.explore = 25;
     }
 
+    // Apply cooldown penalties
+    Object.keys(priorities).forEach(action => {
+      const timeSinceLastAction = Date.now() - this.lastActionTimes[action];
+      if (timeSinceLastAction < this.actionCooldowns[action]) {
+        priorities[action] *= 0.5;
+      }
+    });
+
+    this.actionPriorities = priorities;
+    this.updateActionQueueDisplay();
     return priorities;
   }
 
@@ -516,6 +549,100 @@ export class Game {
     }
   }
 
+  updateActionQueueDisplay() {
+    if (this.queueDisplay) {
+      const priorityList = Object.entries(this.actionPriorities)
+        .sort(([,a], [,b]) => b - a)
+        .map(([action, priority]) => {
+          const cooldown = Math.max(0, this.actionCooldowns[action] - 
+            (Date.now() - this.lastActionTimes[action]));
+          const cooldownStr = cooldown > 0 ? ` (${(cooldown/1000).toFixed(1)}s)` : '';
+          return `${action}: ${priority.toFixed(1)}${cooldownStr}`;
+        })
+        .join('<br>');
+      
+      this.queueDisplay.innerHTML = `
+        <div class="priority-list">
+          <h4>Action Priorities:</h4>
+          ${priorityList}
+        </div>
+        <div class="current-action">
+          ${this.isMoving ? 'Moving...' : 
+            this.isCrafting ? 'Crafting...' : 
+            this.cooldown ? 'Cooling down...' : 
+            'Idle'}
+        </div>`;
+    }
+  }
+
+  determineAndExecuteAction() {
+    if (this.isMoving || this.isCrafting || this.cooldown) {
+      this.updateActionQueueDisplay();
+      return;
+    }
+
+    const priorities = this.evaluateActionPriorities();
+    const highestPriority = Math.max(...Object.values(priorities));
+    
+    if (highestPriority === 0) {
+      this.exploreNewChunks();
+      return;
+    }
+
+    const availableActions = Object.entries(priorities)
+      .filter(([action, priority]) => {
+        const timeSinceLastAction = Date.now() - this.lastActionTimes[action];
+        return priority === highestPriority && 
+               timeSinceLastAction >= this.actionCooldowns[action];
+      })
+      .map(([action]) => action);
+
+    if (availableActions.length === 0) {
+      this.exploreNewChunks();
+      return;
+    }
+
+    const chosenAction = availableActions[
+      Math.floor(Math.random() * availableActions.length)
+    ];
+
+    this.lastActionTimes[chosenAction] = Date.now();
+    
+    switch (chosenAction) {
+      case 'collect':
+        const nearest = this.findNearestCollectible();
+        if (nearest) {
+          this.moveTowardsCollectible(nearest);
+          this.logAction('Moving to collect stardust');
+        }
+        break;
+        
+      case 'craft':
+        if (!this.crafting.isCrafting) {
+          this.crafting.checkAndCraft();
+          this.logAction('Starting crafting process');
+        }
+        break;
+        
+      case 'place':
+        this.placeCreation();
+        this.logAction('Placing creation in space');
+        break;
+        
+      case 'investigate':
+        this.exploreStructures();
+        this.logAction('Investigating cosmic structure');
+        break;
+        
+      case 'explore':
+        this.exploreNewChunks();
+        this.logAction('Exploring new areas');
+        break;
+    }
+
+    this.updateActionQueueDisplay();
+  }
+
   spawnCollectible(x, y) {
     const collectible = document.createElementNS("http://www.w3.org/2000/svg", "circle");
     collectible.setAttribute("cx", x);
@@ -584,54 +711,6 @@ export class Game {
       }
       this.scheduleNextAction();
     }, 5000);
-  }
-
-  determineAndExecuteAction() {
-    const priorities = this.evaluateActionPriorities();
-    const highestPriority = Math.max(...Object.values(priorities));
-    
-    if (highestPriority === 0) {
-      this.exploreNewChunks();
-      return;
-    }
-
-    // Execute action based on highest priority
-    const actions = Object.entries(priorities)
-      .filter(([_, value]) => value === highestPriority)
-      .map(([action]) => action);
-    
-    const chosenAction = actions[Math.floor(Math.random() * actions.length)];
-    
-    switch (chosenAction) {
-      case 'collect':
-        const nearest = this.findNearestCollectible();
-        if (nearest) {
-          this.moveTowardsCollectible(nearest);
-          this.logAction('Moving to collect stardust');
-        }
-        break;
-        
-      case 'craft':
-        if (!this.crafting.isCrafting) {
-          this.crafting.checkAndCraft();
-          this.logAction('Starting crafting process');
-        }
-        break;
-        
-      case 'place':
-        this.placeCreation();
-        this.logAction('Placing creation in space');
-        break;
-        
-      case 'investigate':
-        this.exploreStructures();
-        this.logAction('Investigating cosmic structure');
-        break;
-        
-      default:
-        this.exploreNewChunks();
-        this.logAction('Exploring new areas');
-    }
   }
 
   initializeUI() {
