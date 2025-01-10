@@ -85,6 +85,10 @@
     filter: drop-shadow(0 0 10px white);
   }
 
+  .npc-autonomous {
+    transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
   #start-btn {
     position: fixed;
     top: 50%;
@@ -118,6 +122,26 @@
     animation: ambientFlow 8s infinite;
   }
 
+  .god-structure {
+    position: absolute;
+    pointer-events: none;
+    transition: all 1s;
+    mix-blend-mode: screen;
+  }
+
+  .god-structure path {
+    stroke-width: 2;
+    stroke-linecap: round;
+    fill: none;
+    stroke: rgba(255,255,255,0.8); 
+  }
+
+  .ambient-effect {
+    position: absolute;
+    pointer-events: none;
+    transition: all 0.8s;
+  }
+
   @keyframes pulse {
     0% { r: 20; }
     50% { r: 25; }
@@ -141,10 +165,14 @@
     100% { filter: hue-rotate(360deg); }
   }
 
-  .ambient-effect {
-    position: absolute;
-    pointer-events: none;
-    transition: all 0.8s;
+  @keyframes twinkle {
+    0% { opacity: 0.3; }
+    50% { opacity: 1; }
+    100% { opacity: 0.3; }
+  }
+
+  .star {
+    animation: twinkle 3s infinite;
   }
 </style>
 </head>
@@ -179,6 +207,9 @@ class Game {
     this.npc = this.createNPC();
     this.started = false;
     this.actionHistory = [];
+    this.autonomousInterval = null;
+    this.structures = [];
+    this.lastAutonomousMove = Date.now();
     this.initialize();
   }
   createNPC() {
@@ -212,16 +243,17 @@ class Game {
       star.setAttribute("cy", Math.random() * window.innerHeight);
       star.setAttribute("r", Math.random() * 2 + 1);
       star.setAttribute("fill", `rgba(255,255,255,${Math.random() * 0.5 + 0.5})`);
+      star.classList.add('star');
       this.canvas.appendChild(star);
     };
-    for (let i = 0; i < 50; i++) {
+    for (let i = 0; i < 200; i++) {
       createStar();
     }
     setInterval(() => {
-      if (this.canvas.childElementCount < 200) {
+      if (this.canvas.childElementCount < 500) {
         createStar();
       }
-    }, 1000);
+    }, 200);
   }
   startGame() {
     if (this.started) return;
@@ -234,6 +266,7 @@ class Game {
     this.audio.play().catch(e => console.log('Audio playback failed:', e));
     this.startGameLoop();
     this.startCountdown(180);
+    this.startAutonomousBehavior();
   }
   async getAIAction(state) {
     try {
@@ -243,39 +276,37 @@ class Game {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          prompt: `Generate a creative action for the ${state} state in the Lost Banger game. Be imaginative and dramatic.
-          
-          <typescript-interface>
-          interface Response {
-            action: string;
-            description: string;
-            parameters: {
-              x?: number;
-              y?: number;
-              color?: string;
-              scale?: number;
-              effect?: string;
-              duration?: number;
-              intensity?: number;
-              pattern?: string;
-            }
-          }
-          </typescript-interface>
-          
-          <example>
-          {
-            "action": "cosmicDance",
-            "description": "NPC performs an ethereal dance pattern while leaving trails of stardust",
-            "parameters": {
-              "x": 300,
-              "y": 400,
-              "color": "#FF00FF",
-              "pattern": "spiral",
-              "intensity": 0.8,
-              "duration": 5000
-            }
-          }
-          </example>`,
+          prompt: `Generate a creative action for the ${state} state in the Lost Banger game.
+For NPC: Focus on movement patterns, interactions with structures, and emotional states.
+For God: Create grand cosmic structures and environmental effects that persist and can be interacted with.
+For Ambient: Generate atmospheric changes that enhance the space theme.
+
+Current structures in world: ${this.structures.length}
+NPC position: (${this.npc.getAttribute("cx")}, ${this.npc.getAttribute("cy")})
+Last 3 actions: ${this.actionHistory.slice(0, 3).join(', ')}
+
+<typescript-interface>
+interface Response {
+  action: string;
+  description: string;
+  parameters: {
+    x?: number;
+    y?: number;
+    color?: string;
+    scale?: number;
+    effect?: string;
+    duration?: number;
+    intensity?: number;
+    pattern?: string;
+    structure?: {
+      type: string;
+      interactive: boolean;
+      size: number;
+    }
+  }
+}
+</typescript-interface>
+`,
           data: {
             currentState: state,
             gameTime: Date.now(),
@@ -344,6 +375,35 @@ class Game {
       implemented: false
     });
     localStorage.setItem('godIdeas', JSON.stringify(godIdeas));
+    const structure = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    structure.classList.add('god-structure');
+    const patterns = ['observatory', 'portal', 'crystal', 'nebula'];
+    const pattern = patterns[Math.floor(Math.random() * patterns.length)];
+    switch (pattern) {
+      case 'observatory':
+        structure.innerHTML = `<path d="M-50,-50 L50,50 M-50,50 L50,-50" stroke="${action.parameters.color || '#fff'}"/>`;
+        break;
+      case 'portal':
+        structure.innerHTML = `<circle r="30" fill="none" stroke="${action.parameters.color || '#fff'}"/>`;
+        break;
+    }
+    structure.setAttribute('transform', `translate(${action.parameters.x || window.innerWidth / 2},${action.parameters.y || window.innerHeight / 2})`);
+    this.canvas.appendChild(structure);
+    this.structures.push(structure);
+    if (action.parameters.effect === 'invert') {
+      document.body.style.filter = 'invert(1)';
+      setTimeout(() => document.body.style.filter = '', duration);
+    } else if (action.parameters.effect === 'psychedelic') {
+      document.body.style.animation = `hue-rotate ${duration}ms linear`;
+      setTimeout(() => document.body.style.animation = '', duration);
+    }
+    if (action.parameters.intensity) {
+      const shake = Math.min(action.parameters.intensity * 20, 50);
+      this.canvas.style.transform = `translate(${shake}px, ${shake}px)`;
+      setTimeout(() => this.canvas.style.transform = '', duration);
+    }
+    document.body.classList.add('god-active');
+    setTimeout(() => document.body.classList.remove('god-active'), duration);
     const implementPastIdea = () => {
       const unimplementedIdeas = godIdeas.filter(idea => !idea.implemented);
       if (unimplementedIdeas.length > 0) {
@@ -367,20 +427,6 @@ class Game {
         localStorage.setItem('godIdeas', JSON.stringify(godIdeas));
       }
     };
-    if (action.parameters.effect === 'invert') {
-      document.body.style.filter = 'invert(1)';
-      setTimeout(() => document.body.style.filter = '', duration);
-    } else if (action.parameters.effect === 'psychedelic') {
-      document.body.style.animation = `hue-rotate ${duration}ms linear`;
-      setTimeout(() => document.body.style.animation = '', duration);
-    }
-    if (action.parameters.intensity) {
-      const shake = Math.min(action.parameters.intensity * 20, 50);
-      this.canvas.style.transform = `translate(${shake}px, ${shake}px)`;
-      setTimeout(() => this.canvas.style.transform = '', duration);
-    }
-    document.body.classList.add('god-active');
-    setTimeout(() => document.body.classList.remove('god-active'), duration);
     implementPastIdea();
   }
   handleAmbientAction(action) {
@@ -451,6 +497,53 @@ class Game {
       }, 1000);
       this.startCountdown(180);
     }
+  }
+  startAutonomousBehavior() {
+    this.autonomousInterval = setInterval(() => {
+      if (Date.now() - this.lastAutonomousMove > 2000 && !this.cooldown) {
+        this.autonomousMove();
+      }
+    }, 1000);
+  }
+  autonomousMove() {
+    const movements = [this.wander.bind(this), this.explore.bind(this), this.interactWithStructure.bind(this)];
+    const selectedMove = movements[Math.floor(Math.random() * movements.length)];
+    selectedMove();
+    this.lastAutonomousMove = Date.now();
+  }
+  wander() {
+    const angle = Math.random() * Math.PI * 2;
+    const distance = Math.random() * 100 + 50;
+    const currentX = parseFloat(this.npc.getAttribute("cx"));
+    const currentY = parseFloat(this.npc.getAttribute("cy"));
+    const newX = Math.max(50, Math.min(window.innerWidth - 50, currentX + Math.cos(angle) * distance));
+    const newY = Math.max(50, Math.min(window.innerHeight - 50, currentY + Math.sin(angle) * distance));
+    this.npc.setAttribute("cx", newX);
+    this.npc.setAttribute("cy", newY);
+  }
+  explore() {
+    const target = this.structures[Math.floor(Math.random() * this.structures.length)];
+    if (target) {
+      const rect = target.getBoundingClientRect();
+      this.npc.setAttribute("cx", rect.x + rect.width / 2);
+      this.npc.setAttribute("cy", rect.y + rect.height / 2);
+    } else {
+      this.wander();
+    }
+  }
+  interactWithStructure() {
+    const nearestStructure = this.findNearestStructure();
+    if (nearestStructure) {
+      const rect = nearestStructure.getBoundingClientRect();
+      const angle = Date.now() / 1000;
+      const radius = 50;
+      this.npc.setAttribute("cx", rect.x + rect.width / 2 + Math.cos(angle) * radius);
+      this.npc.setAttribute("cy", rect.y + rect.height / 2 + Math.sin(angle) * radius);
+    }
+  }
+  findNearestStructure() {
+    if (!this.structures.length) return null;
+    return this.structures[0];
   }
 }
 const game = new Game();</script>
