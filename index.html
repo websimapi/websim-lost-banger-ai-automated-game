@@ -810,6 +810,54 @@ interface Response {
     if (!this.structures.length) return null;
     return this.structures[0];
   }
+  orbitNearestStructure() {
+    const structure = this.findNearestStructure();
+    if (structure) {
+      const rect = structure.getBoundingClientRect();
+      const time = Date.now() / 1000;
+      const radius = 100;
+      const centerX = rect.x + rect.width / 2;
+      const centerY = rect.y + rect.height / 2;
+      this.npc.setAttribute("cx", centerX + Math.cos(time) * radius);
+      this.npc.setAttribute("cy", centerY + Math.sin(time) * radius);
+    }
+  }
+  investigateBrightStar() {
+    const rainbowStars = document.querySelectorAll('.star-rainbow');
+    if (rainbowStars.length > 0) {
+      const star = rainbowStars[Math.floor(Math.random() * rainbowStars.length)];
+      const rect = star.getBoundingClientRect();
+      this.npc.setAttribute("cx", rect.x);
+      this.npc.setAttribute("cy", rect.y);
+    }
+  }
+  seekCollectible() {
+    if (!this.collectibles.length) return;
+    const target = this.collectibles[0];
+    const rect = target.getBoundingClientRect();
+    this.npc.classList.add('npc-collecting');
+    const trail = document.createElement('div');
+    trail.className = 'npc-trail';
+    trail.style.left = this.npc.getAttribute("cx") + 'px';
+    trail.style.top = this.npc.getAttribute("cy") + 'px';
+    document.body.appendChild(trail);
+    this.npc.setAttribute("cx", rect.x + rect.width / 2);
+    this.npc.setAttribute("cy", rect.y + rect.height / 2);
+    setTimeout(() => {
+      this.npc.classList.remove('npc-collecting');
+      target.remove();
+      this.collectibles.shift();
+      trail.remove();
+      const baseItems = JSON.parse(localStorage.getItem('baseCollectibles'));
+      if (baseItems && baseItems.length) {
+        const randomItem = baseItems[Math.floor(Math.random() * baseItems.length)];
+        this.inventory.addItem(randomItem);
+        if (Math.random() < 0.3 && this.inventory.items.length >= 2) {
+          this.crafting.show();
+        }
+      }
+    }, 500);
+  }
   initAudio() {
     this.audioContext = new AudioContext();
     this.audioAnalyser = this.audioContext.createAnalyser();
@@ -856,54 +904,6 @@ interface Response {
     collectible.classList.add('collectible');
     this.canvas.appendChild(collectible);
     this.collectibles.push(collectible);
-  }
-  seekCollectible() {
-    if (!this.collectibles.length) return;
-    const target = this.collectibles[0];
-    const rect = target.getBoundingClientRect();
-    this.npc.classList.add('npc-collecting');
-    const trail = document.createElement('div');
-    trail.className = 'npc-trail';
-    trail.style.left = this.npc.getAttribute("cx") + 'px';
-    trail.style.top = this.npc.getAttribute("cy") + 'px';
-    document.body.appendChild(trail);
-    this.npc.setAttribute("cx", rect.x + rect.width / 2);
-    this.npc.setAttribute("cy", rect.y + rect.height / 2);
-    setTimeout(() => {
-      this.npc.classList.remove('npc-collecting');
-      target.remove();
-      this.collectibles.shift();
-      trail.remove();
-      const baseItems = JSON.parse(localStorage.getItem('baseCollectibles'));
-      if (baseItems && baseItems.length) {
-        const randomItem = baseItems[Math.floor(Math.random() * baseItems.length)];
-        this.inventory.addItem(randomItem);
-        if (Math.random() < 0.3 && this.inventory.items.length >= 2) {
-          this.crafting.show();
-        }
-      }
-    }, 500);
-  }
-  orbitNearestStructure() {
-    const structure = this.findNearestStructure();
-    if (structure) {
-      const rect = structure.getBoundingClientRect();
-      const time = Date.now() / 1000;
-      const radius = 100;
-      const centerX = rect.x + rect.width / 2;
-      const centerY = rect.y + rect.height / 2;
-      this.npc.setAttribute("cx", centerX + Math.cos(time) * radius);
-      this.npc.setAttribute("cy", centerY + Math.sin(time) * radius);
-    }
-  }
-  investigateBrightStar() {
-    const rainbowStars = document.querySelectorAll('.star-rainbow');
-    if (rainbowStars.length > 0) {
-      const star = rainbowStars[Math.floor(Math.random() * rainbowStars.length)];
-      const rect = star.getBoundingClientRect();
-      this.npc.setAttribute("cx", rect.x);
-      this.npc.setAttribute("cy", rect.y);
-    }
   }
 }
 class NPCInventory {
