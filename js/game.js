@@ -145,46 +145,35 @@ export class Game {
     const npcX = parseFloat(this.npc.getAttribute("cx"));
     const npcY = parseFloat(this.npc.getAttribute("cy"));
     
-    let nearest = null;
-    let minDist = Infinity;
-    
     const activeCollectibles = this.collectibles.filter(c => !c.collected);
     
-    if (activeCollectibles.length === 0) {
-      return null;
-    }
+    if (activeCollectibles.length === 0) return null;
 
-    activeCollectibles.forEach(collectible => {
-      const dx = collectible.x - npcX;
-      const dy = collectible.y - npcY;
-      const distance = Math.hypot(dx, dy);
-      
-      if (distance < minDist) {
-        minDist = distance;
-        nearest = collectible;
-      }
-    });
-    
-    return nearest;
+    return activeCollectibles.reduce((nearest, current) => {
+      const currentDist = Math.hypot(current.x - npcX, current.y - npcY);
+      const nearestDist = nearest ? Math.hypot(nearest.x - npcX, nearest.y - npcY) : Infinity;
+      return currentDist < nearestDist ? current : nearest;
+    }, null);
   }
 
   evaluateActionPriorities() {
     const priorities = {
-      collect: 0, 
+      collect: 0,
       craft: 0,
       place: 0,
-      explore: 0
+      explore: 0,
+      investigate: 0
     };
 
-    // Higher priority for collection when inventory not full
+    // Collection priority
     const nearestCollectible = this.findNearestCollectible();
     if (nearestCollectible && this.inventory.items.length < this.inventory.maxSize) {
       const distance = this.getDistanceToCollectible(nearestCollectible);
       priorities.collect = Math.max(0, 100 - distance / 10);
       
-      // Extra priority boost if inventory is low
+      // Boost collection priority when inventory is low
       if (this.inventory.items.length < 3) {
-        priorities.collect += 50;
+        priorities.collect += 75;
       }
     }
 
@@ -192,20 +181,26 @@ export class Game {
     if (this.inventory.items.length >= 2) {
       const canCraftSomething = this.crafting.recipes.some(recipe => this.crafting.canCraft(recipe));
       if (canCraftSomething) {
-        priorities.craft = 60 + (this.inventory.items.length * 10);
+        priorities.craft = 40 + (this.inventory.items.length * 15);
       }
     }
 
-    // Placing priority for crafted items
+    // Placing priority for special items
     const hasCraftedItems = this.inventory.items.some(item => 
       item.type.includes('Essence') || item.type.includes('Time'));
     if (hasCraftedItems) {
-      priorities.place = 70;
+      priorities.place = 60 + (Math.random() * 20);
     }
 
-    // Exploration is lowest priority but increases with idle time
+    // Investigation priority for structures
+    const hasUnexploredStructures = this.structures.some(s => !s.explored);
+    if (hasUnexploredStructures) {
+      priorities.investigate = 30 + (Math.random() * 30);
+    }
+
+    // Exploration gets higher priority with idle time
     const idleTime = Date.now() - this.lastAutonomousMove;
-    priorities.explore = Math.min(40, Math.floor(idleTime / 1000));
+    priorities.explore = Math.min(50, Math.floor(idleTime / 300));
 
     return priorities;
   }
@@ -342,8 +337,15 @@ export class Game {
     const startX = parseFloat(this.npc.getAttribute("cx"));
     const startY = parseFloat(this.npc.getAttribute("cy"));
     
-    // Don't move if already at target
-    if (Math.abs(targetX - startX) < 1 && Math.abs(targetY - startY) < 1) {
+    // Add small random offset for more natural movement
+    const offsetX = (Math.random() - 0.5) * 20;
+    const offsetY = (Math.random() - 0.5) * 20;
+    
+    const finalTargetX = targetX + offsetX;
+    const finalTargetY = targetY + offsetY;
+
+    // Don't move if already very close to target
+    if (Math.abs(finalTargetX - startX) < 5 && Math.abs(finalTargetY - startY) < 5) {
       this.isMoving = false;
       this.npc.classList.remove('npc-collecting');
       setTimeout(() => this.checkNextAction(), 100);
@@ -356,17 +358,37 @@ export class Game {
       cancelAnimationFrame(this.moveAnimation);
     }
 
+    // Create movement trail
+    const createTrail = () => {
+      const trail = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      trail.setAttribute("cx", this.npc.getAttribute("cx"));
+      trail.setAttribute("cy", this.npc.getAttribute("cy"));
+      trail.setAttribute("r", "3");
+      trail.classList.add('npc-trail');
+      this.canvas.appendChild(trail);
+      setTimeout(() => trail.remove(), 1000);
+    };
+
     const animate = (currentTime) => {
       const elapsed = currentTime - startTime;
       const progress = Math.min(elapsed / duration, 1);
       
-      const easeProgress = 0.5 - Math.cos(progress * Math.PI) / 2;
+      // Smooth easing function
+      const easeProgress = progress < 0.5 
+        ? 2 * progress * progress 
+        : 1 - Math.pow(-2 * progress + 2, 2) / 2;
       
-      const currentX = startX + (targetX - startX) * easeProgress;
-      const currentY = startY + (targetY - startY) * easeProgress;
+      const currentX = startX + (finalTargetX - startX) * easeProgress;
+      const currentY = startY + (finalTargetY - startY) * easeProgress;
       
       this.npc.setAttribute("cx", currentX);
       this.npc.setAttribute("cy", currentY);
+      
+      // Create trail effect
+      if (Math.random() < 0.2) {
+        createTrail();
+      }
+      
       this.updateCamera();
       
       if (progress < 1) {
@@ -448,34 +470,46 @@ export class Game {
   checkNextAction() {
     if (this.cooldown || this.isCrafting || this.isMoving) return;
 
-    // Get current priorities
     const priorities = this.evaluateActionPriorities();
     const highestPriority = Math.max(...Object.values(priorities));
-    
-    // If no high priority actions and being idle too long, force exploration
-    if (highestPriority < 30 || Date.now() - this.lastAutonomousMove > this.idleTimeout) {
+    const highestPriorityAction = Object.entries(priorities)
+      .find(([_, value]) => value === highestPriority)?.[0];
+
+    // Force action if idle too long
+    if (Date.now() - this.lastAutonomousMove > this.idleTimeout) {
       this.exploreNewChunks();
       return;
     }
 
-    // Execute highest priority action
-    if (priorities.collect === highestPriority) {
-      const nearest = this.findNearestCollectible();
-      if (nearest) {
-        this.moveTowardsCollectible(nearest);
-      } else {
-        this.exploreNewChunks();
-      }
-    } else if (priorities.craft === highestPriority) {
-      this.crafting.checkAndCraft();
-    } else if (priorities.place === highestPriority) {
-      this.placeCreation();
-    } else if (priorities.explore === highestPriority) {
-      if (Math.random() < 0.7) {
+    switch (highestPriorityAction) {
+      case 'collect':
+        const nearest = this.findNearestCollectible();
+        if (nearest) {
+          this.moveTowardsCollectible(nearest);
+        } else {
+          this.exploreNewChunks();
+        }
+        break;
+      
+      case 'craft':
+        this.crafting.checkAndCraft();
+        break;
+      
+      case 'place':
+        this.placeCreation();
+        break;
+      
+      case 'investigate':
         this.exploreStructures();
-      } else {
-        this.exploreNewChunks();
-      }
+        break;
+      
+      case 'explore':
+        if (Math.random() < 0.3) {
+          this.exploreStructures();
+        } else {
+          this.exploreNewChunks();
+        }
+        break;
     }
 
     // Schedule next check if not moving
