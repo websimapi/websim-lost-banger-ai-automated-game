@@ -62,6 +62,7 @@ export class Game {
     this.countdownTimer?.classList.add('hidden');
     this.startAutonomousBehavior();
   }
+
   createNPC() {
     const npcSvg = document.createElementNS("http://www.w3.org/2000/svg", "circle");
     npcSvg.setAttribute("cx", 0);
@@ -72,19 +73,24 @@ export class Game {
     this.canvas.appendChild(npcSvg);
     return npcSvg;
   }
+
   logAction(action) {
     if (!this.actionLog) return;
     this.actionHistory.unshift(`[${new Date().toLocaleTimeString()}] ${action}`);
     if (this.actionHistory.length > 10) this.actionHistory.pop();
     this.actionLog.innerHTML = this.actionHistory.join('<br>');
   }
+
   initialize() {
-    this.npc = this.createNPC();
+    if (!this.npc) {
+      this.npc = this.createNPC();
+    }
     this.updateVisibleChunks();
   }
+
   updateVisibleChunks() {
-    const npcX = parseFloat(this.npc.getAttribute("cx"));
-    const npcY = parseFloat(this.npc.getAttribute("cy"));
+    const npcX = parseFloat(this.npc?.getAttribute("cx")) || 0;
+    const npcY = parseFloat(this.npc?.getAttribute("cy")) || 0;
     const currentChunkX = Math.floor(npcX / this.chunkSize);
     const currentChunkY = Math.floor(npcY / this.chunkSize);
     for (let dx = -2; dx <= 2; dx++) {
@@ -112,6 +118,7 @@ export class Game {
       }
     }
   }
+
   startGame() {
     if (this.started) return;
     this.started = true;
@@ -127,6 +134,7 @@ export class Game {
     this.startAutonomousBehavior();
     this.inventory.show();
   }
+
   async getAIAction(state) {
     try {
       const response = await fetch('/api/ai_completion', {
@@ -141,7 +149,7 @@ For God: Create grand cosmic structures and environmental effects that persist a
 For Ambient: Generate atmospheric changes that enhance the space theme.
 
 Current structures in world: ${this.structures.length}
-NPC position: (${this.npc.getAttribute("cx")}, ${this.npc.getAttribute("cy")})
+NPC position: (${this.npc?.getAttribute("cx") || 0}, ${this.npc?.getAttribute("cy") || 0})
 Last 3 actions: ${this.actionHistory.slice(0, 3).join(', ')}
 
 <typescript-interface>
@@ -179,6 +187,7 @@ interface Response {
       return null;
     }
   }
+
   async executeState() {
     this.lastAutonomousMove = Date.now() + 10000;
     const states = [GameState.NPC, GameState.GOD, GameState.AMBIENT];
@@ -207,21 +216,22 @@ interface Response {
       console.error('Error executing state:', error);
     }
   }
+
   handleNPCAction(action) {
     if (!action || !action.parameters) return;
     const duration = action.parameters.duration || 4000;
-    const targetX = action.parameters.x || parseFloat(this.npc.getAttribute("cx"));
-    const targetY = action.parameters.y || parseFloat(this.npc.getAttribute("cy"));
+    const targetX = action.parameters.x || parseFloat(this.npc?.getAttribute("cx")) || 0;
+    const targetY = action.parameters.y || parseFloat(this.npc?.getAttribute("cy")) || 0;
     this.animateNPCTo(targetX, targetY, duration);
     if (action.parameters.color) {
-      this.npc.setAttribute("fill", action.parameters.color);
+      this.npc?.setAttribute("fill", action.parameters.color);
     }
     if (action.parameters.pattern === 'trail') {
       for (let i = 0; i < 5; i++) {
         setTimeout(() => {
           const trail = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-          trail.setAttribute("cx", this.npc.getAttribute("cx"));
-          trail.setAttribute("cy", this.npc.getAttribute("cy"));
+          trail.setAttribute("cx", this.npc?.getAttribute("cx") || 0);
+          trail.setAttribute("cy", this.npc?.getAttribute("cy") || 0);
           trail.setAttribute("r", "5");
           trail.setAttribute("fill", action.parameters.color || "white");
           trail.style.opacity = "0.5";
@@ -232,6 +242,7 @@ interface Response {
       }
     }
   }
+
   handleGodAction(action) {
     if (!action || !action.parameters) return;
     const duration = action.parameters.duration || 3000;
@@ -322,6 +333,7 @@ interface Response {
       this.crafting.recipes.push(newRecipe);
     }
   }
+
   handleAmbientAction(action) {
     if (!action || !action.parameters) return;
     const duration = action.parameters.duration || 3000;
@@ -354,6 +366,7 @@ interface Response {
       document.body.style.animation = '';
     }, duration);
   }
+
   startGameLoop() {
     this.executeState();
     setInterval(() => {
@@ -375,12 +388,15 @@ interface Response {
     }, 1000);
     requestAnimationFrame(() => this.gameLoop());
   }
+
   gameLoop() {
     this.checkCollisions();
     this.visualizeAudio();
     requestAnimationFrame(() => this.gameLoop());
   }
+
   checkCollisions() {
+    if (!this.npc) return;
     const npcX = parseFloat(this.npc.getAttribute("cx"));
     const npcY = parseFloat(this.npc.getAttribute("cy"));
     const pickupDistance = 30;
@@ -405,6 +421,7 @@ interface Response {
       }
     });
   }
+
   spawnCollectible(x, y) {
     const collectible = document.createElementNS("http://www.w3.org/2000/svg", "circle");
     collectible.setAttribute("cx", x);
@@ -420,60 +437,29 @@ interface Response {
       collected: false
     });
   }
-  animateNPCTo(targetX, targetY, duration) {
-    const startX = parseFloat(this.npc.getAttribute("cx"));
-    const startY = parseFloat(this.npc.getAttribute("cy"));
-    const deltaX = targetX - startX;
-    const deltaY = targetY - startY;
-    const startTime = performance.now();
-    const animate = currentTime => {
-      const elapsed = currentTime - startTime;
-      const progress = Math.min(elapsed / duration, 1);
-      const easeProgress = this.easeInOutCubic(progress);
-      const currentX = startX + deltaX * easeProgress;
-      const currentY = startY + deltaY * easeProgress;
-      this.npc.setAttribute("cx", currentX);
-      this.npc.setAttribute("cy", currentY);
-      if (progress < 1) {
-        requestAnimationFrame(animate);
-      }
-    };
-    requestAnimationFrame(animate);
-  }
-  easeInOutCubic(t) {
-    return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
-  }
-  startCountdown(seconds) {
-    if (!this.timerValue) return;
-    if (this.countdownInterval) {
-      clearInterval(this.countdownInterval);
+
+  wander() {
+    // Guard clause to ensure NPC exists
+    if (!this.npc) {
+      this.initialize();
+      return;
     }
-    const updateTimer = () => {
-      const minutes = Math.floor(seconds / 60);
-      const remainingSeconds = seconds % 60;
-      this.timerValue.textContent = `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
-    };
-    updateTimer();
-    this.countdownInterval = setInterval(() => {
-      seconds--;
-      updateTimer();
-      if (seconds <= 0) {
-        clearInterval(this.countdownInterval);
-        this.startCountdown(180);
-      }
-    }, 1000);
+
+    const angle = Math.random() * Math.PI * 2;
+    const distance = Math.random() * 300 + 200;
+    const currentX = parseFloat(this.npc.getAttribute("cx")) || 0;
+    const currentY = parseFloat(this.npc.getAttribute("cy")) || 0;
+    const newX = currentX + Math.cos(angle) * distance;
+    const newY = currentY + Math.sin(angle) * distance;
+    this.animateNPCTo(newX, newY, 3000);
   }
-  skipCooldown() {
-    if (this.cooldown) {
-      this.cooldown = false;
-      this.skipBtn.style.opacity = '0.5';
-      setTimeout(() => {
-        this.skipBtn.style.opacity = '1';
-      }, 1000);
-      this.startCountdown(180);
-    }
-  }
+
   startAutonomousBehavior() {
+    // Ensure NPC is initialized
+    if (!this.npc) {
+      this.initialize();
+    }
+
     this.autonomousInterval = setInterval(() => {
       if (Date.now() - this.lastAutonomousMove > 2000 && !this.cooldown) {
         if (this.collectibles.length > 0) {
@@ -484,11 +470,14 @@ interface Response {
       }
     }, 1000);
   }
+
   autonomousMove() {
-    if (this.collectibles.length > 0) {
-      this.moveToNearestCollectible();
+    // Guard clause to ensure NPC exists
+    if (!this.npc) {
+      this.initialize();
       return;
     }
+
     const movements = [{
       fn: this.wander.bind(this),
       weight: 1,
@@ -522,23 +511,113 @@ interface Response {
       weight: 1,
       cooldown: 10000
     }];
-    const totalWeight = movements.reduce((sum, m) => sum + m.weight, 0);
+
+    // Add safety checks for all methods that depend on NPC position
+    const safeMethods = movements.map(m => ({
+      ...m,
+      fn: () => {
+        if (this.npc) {
+          m.fn();
+        } else {
+          this.initialize();
+        }
+      }
+    }));
+
+    const totalWeight = safeMethods.reduce((sum, m) => sum + m.weight, 0);
     let random = Math.random() * totalWeight;
-    for (let movement of movements) {
+
+    for (let movement of safeMethods) {
       random -= movement.weight;
       if (random <= 0) {
-        movement.fn();
-        this.lastAutonomousMove = Date.now() + movement.cooldown;
+        try {
+          movement.fn();
+          this.lastAutonomousMove = Date.now() + movement.cooldown;
+        } catch (error) {
+          console.error('Error in autonomous movement:', error);
+          // If there's an error, try to recover by reinitializing
+          this.initialize();
+        }
         break;
       }
     }
   }
+
+  animateNPCTo(targetX, targetY, duration) {
+    // Guard clause to ensure NPC exists
+    if (!this.npc) {
+      this.initialize();
+      return;
+    }
+
+    const startX = parseFloat(this.npc.getAttribute("cx")) || 0;
+    const startY = parseFloat(this.npc.getAttribute("cy")) || 0;
+    const deltaX = targetX - startX;
+    const deltaY = targetY - startY;
+    const startTime = performance.now();
+
+    const animate = currentTime => {
+      if (!this.npc) return; // Stop animation if NPC is gone
+
+      const elapsed = currentTime - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      const easeProgress = this.easeInOutCubic(progress);
+      const currentX = startX + deltaX * easeProgress;
+      const currentY = startY + deltaY * easeProgress;
+
+      this.npc.setAttribute("cx", currentX);
+      this.npc.setAttribute("cy", currentY);
+
+      if (progress < 1) {
+        requestAnimationFrame(animate);
+      }
+    };
+
+    requestAnimationFrame(animate);
+  }
+
+  easeInOutCubic(t) {
+    return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+  }
+
+  startCountdown(seconds) {
+    if (!this.timerValue) return;
+    if (this.countdownInterval) {
+      clearInterval(this.countdownInterval);
+    }
+    const updateTimer = () => {
+      const minutes = Math.floor(seconds / 60);
+      const remainingSeconds = seconds % 60;
+      this.timerValue.textContent = `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+    };
+    updateTimer();
+    this.countdownInterval = setInterval(() => {
+      seconds--;
+      updateTimer();
+      if (seconds <= 0) {
+        clearInterval(this.countdownInterval);
+        this.startCountdown(180);
+      }
+    }, 1000);
+  }
+
+  skipCooldown() {
+    if (this.cooldown) {
+      this.cooldown = false;
+      this.skipBtn.style.opacity = '0.5';
+      setTimeout(() => {
+        this.skipBtn.style.opacity = '1';
+      }, 1000);
+      this.startCountdown(180);
+    }
+  }
+
   moveToNearestCollectible() {
     if (this.collectibles.length === 0) return;
     let nearest = null;
     let minDist = Infinity;
-    const npcX = parseFloat(this.npc.getAttribute("cx"));
-    const npcY = parseFloat(this.npc.getAttribute("cy"));
+    const npcX = parseFloat(this.npc?.getAttribute("cx")) || 0;
+    const npcY = parseFloat(this.npc?.getAttribute("cy")) || 0;
     this.collectibles.forEach(collectible => {
       if (!collectible.collected) {
         const dx = collectible.x - npcX;
@@ -570,15 +649,7 @@ interface Response {
       }, 2100);
     }
   }
-  wander() {
-    const angle = Math.random() * Math.PI * 2;
-    const distance = Math.random() * 300 + 200;
-    const currentX = parseFloat(this.npc.getAttribute("cx"));
-    const currentY = parseFloat(this.npc.getAttribute("cy"));
-    const newX = currentX + Math.cos(angle) * distance;
-    const newY = currentY + Math.sin(angle) * distance;
-    this.animateNPCTo(newX, newY, 3000);
-  }
+
   explore() {
     if (this.structures.length === 0) {
       this.wander();
@@ -599,6 +670,7 @@ interface Response {
       this.wander();
     }
   }
+
   interactWithStructure() {
     const nearestStructure = this.findNearestStructure();
     if (nearestStructure) {
@@ -615,12 +687,13 @@ interface Response {
       }
     }
   }
+
   findNearestStructure() {
     if (!this.structures.length) return null;
     let nearest = null;
     let minDist = Infinity;
-    const npcX = parseFloat(this.npc.getAttribute("cx"));
-    const npcY = parseFloat(this.npc.getAttribute("cy"));
+    const npcX = parseFloat(this.npc?.getAttribute("cx")) || 0;
+    const npcY = parseFloat(this.npc?.getAttribute("cy")) || 0;
     for (let structure of this.structures) {
       const transform = structure.getAttribute('transform');
       const coords = transform.match(/translate\(([-+]?\d*\.?\d+),\s*([-+]?\d*\.?\d+)\)/);
@@ -636,6 +709,7 @@ interface Response {
     }
     return nearest;
   }
+
   orbitNearestStructure() {
     const structure = this.findNearestStructure();
     if (structure) {
@@ -652,6 +726,7 @@ interface Response {
       }
     }
   }
+
   investigateBrightStar() {
     const rainbowStars = document.querySelectorAll('.star-rainbow');
     if (rainbowStars.length > 0) {
@@ -661,6 +736,7 @@ interface Response {
       this.animateNPCTo(cx, cy, 3000);
     }
   }
+
   seekCollectible() {
     if (!this.collectibles.length) return;
     const target = this.collectibles[0];
@@ -687,6 +763,7 @@ interface Response {
       }
     }, 2500);
   }
+
   initAudio() {
     this.audioContext = new AudioContext();
     this.audioAnalyser = this.audioContext.createAnalyser();
@@ -696,6 +773,7 @@ interface Response {
     this.audioAnalyser.fftSize = 256;
     this.audioData = new Uint8Array(this.audioAnalyser.frequencyBinCount);
   }
+
   visualizeAudio() {
     const stars = this.canvas.querySelectorAll('.star');
     this.audioAnalyser.getByteFrequencyData(this.audioData);
@@ -723,7 +801,9 @@ interface Response {
       this.spawnCollectible(x, y);
     }
   }
+
   updateViewBox() {
+    if (!this.npc) return;
     const x = parseFloat(this.npc.getAttribute('cx'));
     const y = parseFloat(this.npc.getAttribute('cy'));
     const viewBoxWidth = window.innerWidth;
