@@ -1,0 +1,326 @@
+body {
+  margin: 0;
+  overflow: hidden;
+  background: #111;
+  font-family: monospace;
+  transition: all 0.8s ease;
+}
+
+#gameCanvas {
+  width: 100vw;
+  height: 100vh;
+  transition: all 1.2s cubic-bezier(0.4, 0, 0.2, 1);
+  background: transparent;
+}
+
+#skip-btn {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  background: rgba(255,255,255,0.1);
+  border: 2px solid rgba(255,255,255,0.2);
+  color: white;
+  padding: 10px 20px;
+  cursor: pointer;
+  border-radius: 20px;
+  transition: all 0.3s;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 120px;
+}
+
+#skip-btn:hover {
+  background: rgba(255,255,255,0.2);
+  transform: scale(1.1);
+}
+
+#state-indicator {
+  position: fixed;
+  top: 20px;
+  left: 20px;
+  color: white;
+  padding: 15px;
+  background: rgba(0,0,0,0.7);
+  border-radius: 10px;
+  z-index: 100;
+  border: 1px solid rgba(255,255,255,0.1);
+  box-shadow: 0 0 20px rgba(0,0,0,0.5);
+  transition: all 0.5s;
+}
+
+#action-log {
+  position: fixed;
+  bottom: 20px;
+  left: 20px;
+  color: white;
+  padding: 15px;
+  background: rgba(0,0,0,0.7);
+  border-radius: 10px;
+  max-width: 300px;
+  max-height: 150px;
+  overflow-y: auto;
+  font-size: 0.9em;
+  z-index: 100;
+  opacity: 0.8;
+  transition: opacity 0.3s;
+}
+
+#action-log:hover {
+  opacity: 1;
+}
+
+#countdown-timer {
+  display: none;
+}
+
+.npc {
+  position: absolute;
+  width: 40px;
+  height: 40px;
+  transition: all 2.5s cubic-bezier(0.4, 0, 0.2, 1);
+  filter: drop-shadow(0 0 10px white);
+  animation: pulse 2s infinite, glow 3s infinite, float 4s infinite;
+}
+
+.npc-autonomous {
+  transition: all 1.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+#start-btn {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(255,255,255,0.2);
+  border: 2px solid rgba(255,255,255,0.3);
+  color: white;
+  padding: 20px 40px;
+  cursor: pointer;
+  border-radius: 30px;
+  font-size: 1.2em;
+  transition: all 0.3s;
+  z-index: 100;
+}
+
+#start-btn:hover {
+  background: rgba(255,255,255,0.3);
+  transform: translate(-50%, -50%) scale(1.1);
+}
+
+.hidden {
+  display: none !important;
+}
+
+.god-active {
+  animation: godPulse 4s infinite;
+}
+
+.ambient-active {
+  animation: ambientFlow 8s infinite;
+}
+
+.god-structure {
+  position: absolute;
+  pointer-events: none;
+  transition: all 1s;
+  mix-blend-mode: screen;
+}
+
+.god-structure path {
+  stroke-width: 2;
+  stroke-linecap: round;
+  fill: none;
+  stroke: rgba(255,255,255,0.8); 
+}
+
+.ambient-effect {
+  position: absolute;
+  pointer-events: none;
+  transition: all 0.8s;
+}
+
+.chunk {
+  position: absolute;
+  width: 1000px;
+  height: 1000px;
+  transition: all 0.5s;
+}
+
+@keyframes pulse {
+  0% { r: 20; }
+  50% { r: 25; }
+  100% { r: 20; }
+}
+
+@keyframes glow {
+  0% { filter: drop-shadow(0 0 5px currentColor); }
+  50% { filter: drop-shadow(0 0 15px currentColor); }
+  100% { filter: drop-shadow(0 0 5px currentColor); }
+}
+
+@keyframes godPulse {
+  0% { background: #111; }
+  50% { background: #330033; }
+  100% { background: #111; }
+}
+
+@keyframes ambientFlow {
+  0% { filter: hue-rotate(0deg); }
+  100% { filter: hue-rotate(360deg); }
+}
+
+@keyframes twinkle {
+  0% { opacity: 0.3; }
+  50% { opacity: 1; }
+  100% { opacity: 0.3; }
+}
+
+@keyframes starPulse {
+  0% { opacity: 0.3; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.5); }
+  100% { opacity: 0.3; transform: scale(1); }
+}
+
+@keyframes starRainbow {
+  0% { fill: #ff0000; }
+  33% { fill: #00ff00; }
+  66% { fill: #0000ff; }
+  100% { fill: #ff0000; }
+}
+
+@keyframes starAudioPulse {
+  0% { r: 1; opacity: 0.3; }
+  50% { r: 3; opacity: 1; }
+  100% { r: 1; opacity: 0.3; }
+}
+
+@keyframes float {
+  0% { transform: translateY(0px) scale(1); }
+  50% { transform: translateY(10px) scale(1.1); }
+  100% { transform: translateY(0px) scale(1); }
+}
+
+.star {
+  animation: twinkle 3s infinite;
+}
+
+.star-active {
+  animation: starPulse 0.5s infinite;
+}
+
+.star-rainbow {
+  animation: starRainbow 2s infinite;
+}
+
+.npc-trail {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.8);
+  pointer-events: none;
+  mix-blend-mode: screen;
+  animation: fadeTrail 1s forwards;
+}
+
+@keyframes fadeTrail {
+  0% { transform: scale(1); opacity: 0.8; }
+  100% { transform: scale(0); opacity: 0; }
+}
+
+.collectible {
+  animation: collectiblePulse 2s infinite;
+  filter: drop-shadow(0 0 10px gold);
+}
+
+@keyframes collectiblePulse {
+  0% { r: 8; fill: yellow; }
+  50% { r: 12; fill: gold; }
+  100% { r: 8; fill: yellow; }
+}
+
+.npc-collecting {
+  animation: collectingPulse 1s infinite;
+  filter: drop-shadow(0 0 20px gold);
+}
+
+@keyframes collectingPulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.2); }
+  100% { transform: scale(1); }
+}
+
+.npc-inventory {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  background: rgba(0,0,0,0.7);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 10px;
+  padding: 10px;
+  color: white;
+  font-family: monospace;
+  z-index: 100;
+}
+
+.npc-inventory-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
+.npc-crafting {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0,0,0,0.9);
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 15px;
+  padding: 20px;
+  color: white;
+  z-index: 200;
+  display: none;
+  width: 300px;
+}
+
+.npc-crafting.active {
+  display: block;
+}
+
+#craft-progress {
+  width: 100%;
+  background-color: rgba(255, 255, 255, 0.2);
+  border-radius: 5px;
+  overflow: hidden;
+  height: 20px;
+  margin-top: 10px;
+}
+
+#craft-bar {
+  width: 0%;
+  height: 100%;
+  background-color: gold;
+  transition: width 0.5s;
+}
+
+.crafting-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 15px;
+}
+
+.craft-slot {
+  width: 40px;
+  height: 40px;
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}

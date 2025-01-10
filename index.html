@@ -1,333 +1,336 @@
-<html><head><base href="/">
-<title>Lost Banger - AI Automated Game</title>
-<style>
-  body {
-    margin: 0;
-    overflow: hidden;
-    background: #111;
-    font-family: monospace;
-    transition: all 0.8s ease;
-  }
-  
-  #gameCanvas {
-    width: 100vw;
-    height: 100vh;
-    transition: all 1.2s cubic-bezier(0.4, 0, 0.2, 1);
-    background: transparent;
-  }
-  
-  #skip-btn {
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    background: rgba(255,255,255,0.1);
-    border: 2px solid rgba(255,255,255,0.2);
-    color: white;
-    padding: 10px 20px;
-    cursor: pointer;
-    border-radius: 20px;
-    transition: all 0.3s;
-    z-index: 100;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    min-width: 120px;
-  }
-  
-  #skip-btn:hover {
-    background: rgba(255,255,255,0.2);
-    transform: scale(1.1);
-  }
-  
-  #state-indicator {
-    position: fixed;
-    top: 20px;
-    left: 20px;
-    color: white;
-    padding: 15px;
-    background: rgba(0,0,0,0.7);
-    border-radius: 10px;
-    z-index: 100;
-    border: 1px solid rgba(255,255,255,0.1);
-    box-shadow: 0 0 20px rgba(0,0,0,0.5);
-    transition: all 0.5s;
-  }
+<html>
+<head>
+  <base href="/">
+  <title>Lost Banger - AI Automated Game</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: #111;
+      font-family: monospace;
+      transition: all 0.8s ease;
+    }
+    
+    #gameCanvas {
+      width: 100vw;
+      height: 100vh;
+      transition: all 1.2s cubic-bezier(0.4, 0, 0.2, 1);
+      background: transparent;
+    }
+    
+    #skip-btn {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: rgba(255,255,255,0.1);
+      border: 2px solid rgba(255,255,255,0.2);
+      color: white;
+      padding: 10px 20px;
+      cursor: pointer;
+      border-radius: 20px;
+      transition: all 0.3s;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 120px;
+    }
+    
+    #skip-btn:hover {
+      background: rgba(255,255,255,0.2);
+      transform: scale(1.1);
+    }
+    
+    #state-indicator {
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      color: white;
+      padding: 15px;
+      background: rgba(0,0,0,0.7);
+      border-radius: 10px;
+      z-index: 100;
+      border: 1px solid rgba(255,255,255,0.1);
+      box-shadow: 0 0 20px rgba(0,0,0,0.5);
+      transition: all 0.5s;
+    }
 
-  #action-log {
-    position: fixed;
-    bottom: 20px;
-    left: 20px;
-    color: white;
-    padding: 15px;
-    background: rgba(0,0,0,0.7);
-    border-radius: 10px;
-    max-width: 300px;
-    max-height: 150px;
-    overflow-y: auto;
-    font-size: 0.9em;
-    z-index: 100;
-    opacity: 0.8;
-    transition: opacity 0.3s;
-  }
+    #action-log {
+      position: fixed;
+      bottom: 20px;
+      left: 20px;
+      color: white;
+      padding: 15px;
+      background: rgba(0,0,0,0.7);
+      border-radius: 10px;
+      max-width: 300px;
+      max-height: 150px;
+      overflow-y: auto;
+      font-size: 0.9em;
+      z-index: 100;
+      opacity: 0.8;
+      transition: opacity 0.3s;
+    }
 
-  #action-log:hover {
-    opacity: 1;
-  }
+    #action-log:hover {
+      opacity: 1;
+    }
 
-  #countdown-timer {
-    display: none;
-  }
+    #countdown-timer {
+      display: none;
+    }
 
-  .npc {
-    position: absolute;
-    width: 40px;
-    height: 40px;
-    transition: all 2.5s cubic-bezier(0.4, 0, 0.2, 1);
-    filter: drop-shadow(0 0 10px white);
-    animation: pulse 2s infinite, glow 3s infinite, float 4s infinite;
-  }
+    .npc {
+      position: absolute;
+      width: 40px;
+      height: 40px;
+      transition: all 2.5s cubic-bezier(0.4, 0, 0.2, 1);
+      filter: drop-shadow(0 0 10px white);
+      animation: pulse 2s infinite, glow 3s infinite, float 4s infinite;
+    }
 
-  .npc-autonomous {
-    transition: all 1.5s cubic-bezier(0.4, 0, 0.2, 1);
-  }
+    .npc-autonomous {
+      transition: all 1.5s cubic-bezier(0.4, 0, 0.2, 1);
+    }
 
-  #start-btn {
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: rgba(255,255,255,0.2);
-    border: 2px solid rgba(255,255,255,0.3);
-    color: white;
-    padding: 20px 40px;
-    cursor: pointer;
-    border-radius: 30px;
-    font-size: 1.2em;
-    transition: all 0.3s;
-    z-index: 100;
-  }
+    #start-btn {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(255,255,255,0.2);
+      border: 2px solid rgba(255,255,255,0.3);
+      color: white;
+      padding: 20px 40px;
+      cursor: pointer;
+      border-radius: 30px;
+      font-size: 1.2em;
+      transition: all 0.3s;
+      z-index: 100;
+    }
 
-  #start-btn:hover {
-    background: rgba(255,255,255,0.3);
-    transform: translate(-50%, -50%) scale(1.1);
-  }
+    #start-btn:hover {
+      background: rgba(255,255,255,0.3);
+      transform: translate(-50%, -50%) scale(1.1);
+    }
 
-  .hidden {
-    display: none !important;
-  }
+    .hidden {
+      display: none !important;
+    }
 
-  .god-active {
-    animation: godPulse 4s infinite;
-  }
+    .god-active {
+      animation: godPulse 4s infinite;
+    }
 
-  .ambient-active {
-    animation: ambientFlow 8s infinite;
-  }
+    .ambient-active {
+      animation: ambientFlow 8s infinite;
+    }
 
-  .god-structure {
-    position: absolute;
-    pointer-events: none;
-    transition: all 1s;
-    mix-blend-mode: screen;
-  }
+    .god-structure {
+      position: absolute;
+      pointer-events: none;
+      transition: all 1s;
+      mix-blend-mode: screen;
+    }
 
-  .god-structure path {
-    stroke-width: 2;
-    stroke-linecap: round;
-    fill: none;
-    stroke: rgba(255,255,255,0.8); 
-  }
+    .god-structure path {
+      stroke-width: 2;
+      stroke-linecap: round;
+      fill: none;
+      stroke: rgba(255,255,255,0.8); 
+    }
 
-  .ambient-effect {
-    position: absolute;
-    pointer-events: none;
-    transition: all 0.8s;
-  }
+    .ambient-effect {
+      position: absolute;
+      pointer-events: none;
+      transition: all 0.8s;
+    }
 
-  .chunk {
-    position: absolute;
-    width: 1000px;
-    height: 1000px;
-    transition: all 0.5s;
-  }
+    .chunk {
+      position: absolute;
+      width: 1000px;
+      height: 1000px;
+      transition: all 0.5s;
+    }
 
-  @keyframes pulse {
-    0% { r: 20; }
-    50% { r: 25; }
-    100% { r: 20; }
-  }
+    @keyframes pulse {
+      0% { r: 20; }
+      50% { r: 25; }
+      100% { r: 20; }
+    }
 
-  @keyframes glow {
-    0% { filter: drop-shadow(0 0 5px currentColor); }
-    50% { filter: drop-shadow(0 0 15px currentColor); }
-    100% { filter: drop-shadow(0 0 5px currentColor); }
-  }
+    @keyframes glow {
+      0% { filter: drop-shadow(0 0 5px currentColor); }
+      50% { filter: drop-shadow(0 0 15px currentColor); }
+      100% { filter: drop-shadow(0 0 5px currentColor); }
+    }
 
-  @keyframes godPulse {
-    0% { background: #111; }
-    50% { background: #330033; }
-    100% { background: #111; }
-  }
+    @keyframes godPulse {
+      0% { background: #111; }
+      50% { background: #330033; }
+      100% { background: #111; }
+    }
 
-  @keyframes ambientFlow {
-    0% { filter: hue-rotate(0deg); }
-    100% { filter: hue-rotate(360deg); }
-  }
+    @keyframes ambientFlow {
+      0% { filter: hue-rotate(0deg); }
+      100% { filter: hue-rotate(360deg); }
+    }
 
-  @keyframes twinkle {
-    0% { opacity: 0.3; }
-    50% { opacity: 1; }
-    100% { opacity: 0.3; }
-  }
+    @keyframes twinkle {
+      0% { opacity: 0.3; }
+      50% { opacity: 1; }
+      100% { opacity: 0.3; }
+    }
 
-  @keyframes starPulse {
-    0% { opacity: 0.3; transform: scale(1); }
-    50% { opacity: 1; transform: scale(1.5); }
-    100% { opacity: 0.3; transform: scale(1); }
-  }
+    @keyframes starPulse {
+      0% { opacity: 0.3; transform: scale(1); }
+      50% { opacity: 1; transform: scale(1.5); }
+      100% { opacity: 0.3; transform: scale(1); }
+    }
 
-  @keyframes starRainbow {
-    0% { fill: #ff0000; }
-    33% { fill: #00ff00; }
-    66% { fill: #0000ff; }
-    100% { fill: #ff0000; }
-  }
+    @keyframes starRainbow {
+      0% { fill: #ff0000; }
+      33% { fill: #00ff00; }
+      66% { fill: #0000ff; }
+      100% { fill: #ff0000; }
+    }
 
-  @keyframes starAudioPulse {
-    0% { r: 1; opacity: 0.3; }
-    50% { r: 3; opacity: 1; }
-    100% { r: 1; opacity: 0.3; }
-  }
+    @keyframes starAudioPulse {
+      0% { r: 1; opacity: 0.3; }
+      50% { r: 3; opacity: 1; }
+      100% { r: 1; opacity: 0.3; }
+    }
 
-  @keyframes float {
-    0% { transform: translateY(0px) scale(1); }
-    50% { transform: translateY(10px) scale(1.1); }
-    100% { transform: translateY(0px) scale(1); }
-  }
+    @keyframes float {
+      0% { transform: translateY(0px) scale(1); }
+      50% { transform: translateY(10px) scale(1.1); }
+      100% { transform: translateY(0px) scale(1); }
+    }
 
-  .star {
-    animation: twinkle 3s infinite;
-  }
+    .star {
+      animation: twinkle 3s infinite;
+    }
 
-  .star-active {
-    animation: starPulse 0.5s infinite;
-  }
+    .star-active {
+      animation: starPulse 0.5s infinite;
+    }
 
-  .star-rainbow {
-    animation: starRainbow 2s infinite;
-  }
+    .star-rainbow {
+      animation: starRainbow 2s infinite;
+    }
 
-  .npc-trail {
-    position: absolute;
-    width: 4px;
-    height: 4px;
-    border-radius: 50%;
-    background: rgba(255,255,255,0.8);
-    pointer-events: none;
-    mix-blend-mode: screen;
-    animation: fadeTrail 1s forwards;
-  }
+    .npc-trail {
+      position: absolute;
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.8);
+      pointer-events: none;
+      mix-blend-mode: screen;
+      animation: fadeTrail 1s forwards;
+    }
 
-  @keyframes fadeTrail {
-    0% { transform: scale(1); opacity: 0.8; }
-    100% { transform: scale(0); opacity: 0; }
-  }
+    @keyframes fadeTrail {
+      0% { transform: scale(1); opacity: 0.8; }
+      100% { transform: scale(0); opacity: 0; }
+    }
 
-  .collectible {
-    animation: collectiblePulse 2s infinite;
-    filter: drop-shadow(0 0 10px gold);
-  }
+    .collectible {
+      animation: collectiblePulse 2s infinite;
+      filter: drop-shadow(0 0 10px gold);
+    }
 
-  @keyframes collectiblePulse {
-    0% { r: 8; fill: yellow; }
-    50% { r: 12; fill: gold; }
-    100% { r: 8; fill: yellow; }
-  }
+    @keyframes collectiblePulse {
+      0% { r: 8; fill: yellow; }
+      50% { r: 12; fill: gold; }
+      100% { r: 8; fill: yellow; }
+    }
 
-  .npc-collecting {
-    animation: collectingPulse 1s infinite;
-    filter: drop-shadow(0 0 20px gold);
-  }
+    .npc-collecting {
+      animation: collectingPulse 1s infinite;
+      filter: drop-shadow(0 0 20px gold);
+    }
 
-  @keyframes collectingPulse {
-    0% { transform: scale(1); }
-    50% { transform: scale(1.2); }
-    100% { transform: scale(1); }
-  }
+    @keyframes collectingPulse {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.2); }
+      100% { transform: scale(1); }
+    }
 
-  .npc-inventory {
-    position: fixed;
-    bottom: 20px;
-    right: 20px;
-    background: rgba(0,0,0,0.7);
-    border: 1px solid rgba(255,255,255,0.1);
-    border-radius: 10px;
-    padding: 10px;
-    color: white;
-    font-family: monospace;
-    z-index: 100;
-  }
+    .npc-inventory {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: rgba(0,0,0,0.7);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 10px;
+      padding: 10px;
+      color: white;
+      font-family: monospace;
+      z-index: 100;
+    }
 
-  .npc-inventory-item {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 5px;
-    border-bottom: 1px solid rgba(255,255,255,0.1);
-  }
+    .npc-inventory-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 5px;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
 
-  .npc-crafting {
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: rgba(0,0,0,0.9);
-    border: 1px solid rgba(255,255,255,0.2);
-    border-radius: 15px;
-    padding: 20px;
-    color: white;
-    z-index: 200;
-    display: none;
-    width: 300px;
-  }
+    .npc-crafting {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0,0,0,0.9);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 15px;
+      padding: 20px;
+      color: white;
+      z-index: 200;
+      display: none;
+      width: 300px;
+    }
 
-  .npc-crafting.active {
-    display: block;
-  }
+    .npc-crafting.active {
+      display: block;
+    }
 
-  #craft-progress {
-    width: 100%;
-    background-color: rgba(255, 255, 255, 0.2);
-    border-radius: 5px;
-    overflow: hidden;
-    height: 20px;
-    margin-top: 10px;
-  }
+    #craft-progress {
+      width: 100%;
+      background-color: rgba(255, 255, 255, 0.2);
+      border-radius: 5px;
+      overflow: hidden;
+      height: 20px;
+      margin-top: 10px;
+    }
 
-  #craft-bar {
-    width: 0%;
-    height: 100%;
-    background-color: gold;
-    transition: width 0.5s;
-  }
+    #craft-bar {
+      width: 0%;
+      height: 100%;
+      background-color: gold;
+      transition: width 0.5s;
+    }
 
-  .crafting-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 10px;
-    margin-bottom: 15px;
-  }
+    .crafting-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-bottom: 15px;
+    }
 
-  .craft-slot {
-    width: 40px;
-    height: 40px;
-    border: 1px solid rgba(255,255,255,0.2);
-    border-radius: 5px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-</style>
+    .craft-slot {
+      width: 40px;
+      height: 40px;
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 5px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+  </style>
 </head>
 <body>
   <svg id="gameCanvas" viewBox="-5000 -5000 10000 10000"/>
@@ -347,925 +350,12 @@
       <div id="craft-bar"></div>
     </div>
   </div>
+  
   <audio id="bgMusic" loop>
     <source src="/lostbanger.wav" type="audio/wav">
   </audio>
 
-  <script type="module">const GameState = {
-  NPC: 'NPC',
-  GOD: 'GOD',
-  AMBIENT: 'AMBIENT'
-};
-class Chunk {
-  constructor(x, y) {
-    this.x = x;
-    this.y = y;
-    this.element = document.createElementNS("http://www.w3.org/2000/svg", "g");
-    this.element.classList.add('chunk');
-    this.element.setAttribute('transform', `translate(${x * 1000}, ${y * 1000})`);
-    this.generated = false;
-    this.collectibles = [];
-    this.generate();
-  }
-  generate() {
-    if (this.generated) return;
-    const starCount = Math.floor(Math.random() * 50) + 50;
-    for (let i = 0; i < starCount; i++) {
-      const star = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-      const cx = Math.random() * 1000;
-      const cy = Math.random() * 1000;
-      star.setAttribute("cx", cx);
-      star.setAttribute("cy", cy);
-      star.setAttribute("r", Math.random() * 2 + 1);
-      star.setAttribute("fill", `rgba(255,255,255,${Math.random() * 0.5 + 0.5})`);
-      star.classList.add('star');
-      this.element.appendChild(star);
-    }
-    for (let i = 0; i < 10; i++) {
-      const collectible = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-      const cx = Math.random() * 1000;
-      const cy = Math.random() * 1000;
-      collectible.setAttribute("cx", cx);
-      collectible.setAttribute("cy", cy);
-      collectible.setAttribute("r", 8);
-      collectible.setAttribute("fill", "yellow");
-      collectible.classList.add('collectible');
-      this.element.appendChild(collectible);
-      this.collectibles.push({
-        element: collectible,
-        x: cx,
-        y: cy,
-        collected: false
-      });
-    }
-    if (Math.random() < 0.1) {
-      const structure = document.createElementNS("http://www.w3.org/2000/svg", "g");
-      structure.classList.add('god-structure');
-      const patterns = ['observatory', 'portal', 'crystal', 'nebula'];
-      const pattern = patterns[Math.floor(Math.random() * patterns.length)];
-      switch (pattern) {
-        case 'observatory':
-          structure.innerHTML = `<path d="M-50,-50 L50,50 M-50,50 L50,-50" stroke="#fff"/>`;
-          break;
-        case 'portal':
-          structure.innerHTML = `<circle r="30" fill="none" stroke="#fff"/>`;
-          break;
-        case 'crystal':
-          structure.innerHTML = `<polygon points="0,-40 35,20 -35,20" stroke="#fff" fill="none"/>`;
-          break;
-        case 'nebula':
-          structure.innerHTML = `<path d="M0,0 C50,50 100,50 150,0" stroke="#fff" fill="none"/>`;
-          break;
-      }
-      const posX = Math.random() * 1000;
-      const posY = Math.random() * 1000;
-      structure.setAttribute('transform', `translate(${posX},${posY})`);
-      this.element.appendChild(structure);
-    }
-    this.generated = true;
-  }
-}
-class Game {
-  constructor() {
-    this.canvas = document.getElementById('gameCanvas');
-    this.stateIndicator = document.getElementById('state-indicator');
-    this.actionLog = document.getElementById('action-log');
-    this.skipBtn = document.getElementById('skip-btn');
-    this.startBtn = document.getElementById('start-btn');
-    this.audio = document.getElementById('bgMusic');
-    this.countdownTimer = document.getElementById('countdown-timer');
-    this.timerValue = document.getElementById('timer-value');
-    this.countdownInterval = null;
-    this.currentState = null;
-    this.cooldown = false;
-    this.started = false;
-    this.actionHistory = [];
-    this.autonomousInterval = null;
-    this.chunks = new Map();
-    this.chunkSize = 1000;
-    this.loadedChunks = new Set();
-    this.lastChunkUpdate = 0;
-    this.lastAutonomousMove = Date.now();
-    this.audioContext = null;
-    this.audioAnalyser = null;
-    this.audioData = null;
-    this.collectibles = [];
-    this.inventory = new NPCInventory();
-    this.crafting = new NPCCrafting(this.inventory, this);
-    this.structures = [];
-    this.initialize();
-    this.spawnedStructures = [];
-    if (!localStorage.getItem('baseCollectibles')) {
-      localStorage.setItem('baseCollectibles', JSON.stringify([{
-        type: 'stardust',
-        color: '#00ffff',
-        value: 10
-      }, {
-        type: 'cosmicShard',
-        color: '#ff00ff',
-        value: 20
-      }, {
-        type: 'voidEssence',
-        color: '#ffff00',
-        value: 30
-      }]));
-    }
-    if (!localStorage.getItem('godIdeas')) {
-      localStorage.setItem('godIdeas', JSON.stringify([]));
-    }
-    if (this.skipBtn) {
-      this.skipBtn.addEventListener('click', () => this.skipCooldown());
-    }
-    if (this.startBtn) {
-      this.startBtn.addEventListener('click', () => this.startGame());
-    }
-    this.skipBtn?.classList.add('hidden');
-    this.stateIndicator?.classList.add('hidden');
-    this.actionLog?.classList.add('hidden');
-    this.countdownTimer?.classList.add('hidden');
-    this.startAutonomousBehavior();
-  }
-  createNPC() {
-    const npcSvg = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-    npcSvg.setAttribute("cx", 0);
-    npcSvg.setAttribute("cy", 0);
-    npcSvg.setAttribute("r", "20");
-    npcSvg.setAttribute("fill", "white");
-    npcSvg.classList.add('npc');
-    this.canvas.appendChild(npcSvg);
-    return npcSvg;
-  }
-  logAction(action) {
-    if (!this.actionLog) return;
-    this.actionHistory.unshift(`[${new Date().toLocaleTimeString()}] ${action}`);
-    if (this.actionHistory.length > 10) this.actionHistory.pop();
-    this.actionLog.innerHTML = this.actionHistory.join('<br>');
-  }
-  initialize() {
-    this.npc = this.createNPC();
-    this.updateVisibleChunks();
-  }
-  updateVisibleChunks() {
-    const npcX = parseFloat(this.npc.getAttribute("cx"));
-    const npcY = parseFloat(this.npc.getAttribute("cy"));
-    const currentChunkX = Math.floor(npcX / this.chunkSize);
-    const currentChunkY = Math.floor(npcY / this.chunkSize);
-    for (let dx = -2; dx <= 2; dx++) {
-      for (let dy = -2; dy <= 2; dy++) {
-        const chunkX = currentChunkX + dx;
-        const chunkY = currentChunkY + dy;
-        const key = `${chunkX},${chunkY}`;
-        if (!this.chunks.has(key)) {
-          const chunk = new Chunk(chunkX, chunkY);
-          this.chunks.set(key, chunk);
-          this.canvas.appendChild(chunk.element);
-          chunk.collectibles.forEach(c => this.collectibles.push(c));
-        }
-      }
-    }
-    for (const [key, chunk] of this.chunks) {
-      const [x, y] = key.split(',').map(Number);
-      if (Math.abs(x - currentChunkX) > 3 || Math.abs(y - currentChunkY) > 3) {
-        chunk.element.remove();
-        this.chunks.delete(key);
-        chunk.collectibles.forEach(c => {
-          const index = this.collectibles.indexOf(c);
-          if (index > -1) this.collectibles.splice(index, 1);
-        });
-      }
-    }
-  }
-  startGame() {
-    if (this.started) return;
-    this.started = true;
-    this.startBtn?.classList.add('hidden');
-    this.skipBtn?.classList.remove('hidden');
-    this.stateIndicator?.classList.remove('hidden');
-    this.actionLog?.classList.remove('hidden');
-    this.countdownTimer?.classList.remove('hidden');
-    this.audio?.play().catch(e => console.log('Audio playback failed:', e));
-    this.initAudio();
-    this.startGameLoop();
-    this.startCountdown(180);
-    this.startAutonomousBehavior();
-    this.inventory.show();
-  }
-  async getAIAction(state) {
-    try {
-      const response = await fetch('/api/ai_completion', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          prompt: `Generate a creative action for the ${state} state in the Lost Banger game.
-For NPC: Focus on movement patterns, interactions with structures, and emotional states.
-For God: Create grand cosmic structures and environmental effects that persist and can be interacted with.
-For Ambient: Generate atmospheric changes that enhance the space theme.
-
-Current structures in world: ${this.structures.length}
-NPC position: (${this.npc.getAttribute("cx")}, ${this.npc.getAttribute("cy")})
-Last 3 actions: ${this.actionHistory.slice(0, 3).join(', ')}
-
-<typescript-interface>
-interface Response {
-  action: string;
-  description: string;
-  parameters: {
-    x?: number;
-    y?: number;
-    color?: string;
-    scale?: number;
-    effect?: string;
-    duration?: number;
-    intensity?: number;
-    pattern?: string;
-    structure?: {
-      type: string;
-      interactive: boolean;
-      size: number;
-    }
-  }
-}
-</typescript-interface>
-`,
-          data: {
-            currentState: state,
-            gameTime: Date.now(),
-            previousActions: this.actionHistory
-          }
-        })
-      });
-      return await response.json();
-    } catch (error) {
-      console.error('AI Action Error:', error);
-      return null;
-    }
-  }
-  async executeState() {
-    this.lastAutonomousMove = Date.now() + 10000;
-    const states = [GameState.NPC, GameState.GOD, GameState.AMBIENT];
-    this.currentState = states[Math.floor(Math.random() * states.length)];
-    if (this.stateIndicator) {
-      this.stateIndicator.textContent = `Current State: ${this.currentState}`;
-      this.stateIndicator.style.background = this.currentState === GameState.NPC ? 'rgba(0,255,255,0.3)' : this.currentState === GameState.GOD ? 'rgba(255,0,255,0.3)' : 'rgba(255,255,0,0.3)';
-    }
-    try {
-      const action = await this.getAIAction(this.currentState);
-      if (action) {
-        this.logAction(`${this.currentState}: ${action.description}`);
-        switch (this.currentState) {
-          case GameState.NPC:
-            this.handleNPCAction(action);
-            break;
-          case GameState.GOD:
-            this.handleGodAction(action);
-            break;
-          case GameState.AMBIENT:
-            this.handleAmbientAction(action);
-            break;
-        }
-      }
-    } catch (error) {
-      console.error('Error executing state:', error);
-    }
-  }
-  handleNPCAction(action) {
-    if (!action || !action.parameters) return;
-    const duration = action.parameters.duration || 4000;
-    const targetX = action.parameters.x || parseFloat(this.npc.getAttribute("cx"));
-    const targetY = action.parameters.y || parseFloat(this.npc.getAttribute("cy"));
-    this.animateNPCTo(targetX, targetY, duration);
-    if (action.parameters.color) {
-      this.npc.setAttribute("fill", action.parameters.color);
-    }
-    if (action.parameters.pattern === 'trail') {
-      for (let i = 0; i < 5; i++) {
-        setTimeout(() => {
-          const trail = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-          trail.setAttribute("cx", this.npc.getAttribute("cx"));
-          trail.setAttribute("cy", this.npc.getAttribute("cy"));
-          trail.setAttribute("r", "5");
-          trail.setAttribute("fill", action.parameters.color || "white");
-          trail.style.opacity = "0.5";
-          trail.style.animation = "glow 2s infinite";
-          this.canvas.appendChild(trail);
-          setTimeout(() => trail.remove(), 2000);
-        }, i * 200);
-      }
-    }
-  }
-  handleGodAction(action) {
-    if (!action || !action.parameters) return;
-    const duration = action.parameters.duration || 3000;
-    let godIdeas = JSON.parse(localStorage.getItem('godIdeas') || '[]');
-    godIdeas.push({
-      timestamp: Date.now(),
-      action: action,
-      implemented: false
-    });
-    localStorage.setItem('godIdeas', JSON.stringify(godIdeas));
-    const structure = document.createElementNS("http://www.w3.org/2000/svg", "g");
-    structure.classList.add('god-structure');
-    const patterns = ['observatory', 'portal', 'crystal', 'nebula'];
-    const pattern = patterns[Math.floor(Math.random() * patterns.length)];
-    switch (pattern) {
-      case 'observatory':
-        structure.innerHTML = `<path d="M-50,-50 L50,50 M-50,50 L50,-50" stroke="${action.parameters.color || '#fff'}"/>`;
-        break;
-      case 'portal':
-        structure.innerHTML = `<circle r="30" fill="none" stroke="${action.parameters.color || '#fff'}"/>`;
-        break;
-      case 'crystal':
-        structure.innerHTML = `<polygon points="0,-40 35,20 -35,20" stroke="${action.parameters.color || '#fff'}" fill="none"/>`;
-        break;
-      case 'nebula':
-        structure.innerHTML = `<path d="M0,0 C50,50 100,50 150,0" stroke="${action.parameters.color || '#fff'}" fill="none"/>`;
-        break;
-    }
-    const posX = action.parameters.x || 0;
-    const posY = action.parameters.y || 0;
-    structure.setAttribute('transform', `translate(${posX},${posY})`);
-    this.canvas.appendChild(structure);
-    this.structures.push(structure);
-    if (action.parameters.effect === 'invert') {
-      document.body.style.filter = 'invert(1)';
-      setTimeout(() => document.body.style.filter = '', duration);
-    } else if (action.parameters.effect === 'psychedelic') {
-      document.body.style.animation = `hue-rotate ${duration}ms linear`;
-      setTimeout(() => {
-        document.body.style.animation = '';
-      }, duration);
-    }
-    if (action.parameters.intensity) {
-      const shake = Math.min(action.parameters.intensity * 20, 50);
-      this.canvas.style.transform = `translate(${shake}px, ${shake}px)`;
-      setTimeout(() => {
-        this.canvas.style.transform = `translate(0px, 0px)`;
-      }, duration);
-    }
-    document.body.classList.add('god-active');
-    setTimeout(() => document.body.classList.remove('god-active'), duration);
-    const implementPastIdea = () => {
-      const unimplementedIdeas = godIdeas.filter(idea => !idea.implemented);
-      if (unimplementedIdeas.length > 0) {
-        const idea = unimplementedIdeas[Math.floor(Math.random() * unimplementedIdeas.length)];
-        const element = document.createElementNS("http://www.w3.org/2000/svg", "g");
-        const patterns = ['spiral', 'orbit', 'pulse', 'wave'];
-        const pattern = patterns[Math.floor(Math.random() * patterns.length)];
-        switch (pattern) {
-          case 'spiral':
-            for (let i = 0; i < 10; i++) {
-              const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-              circle.setAttribute("r", 5);
-              circle.setAttribute("fill", idea.action.parameters.color || "#fff");
-              circle.style.animation = `spiral${i} ${duration}ms infinite`;
-              element.appendChild(circle);
-            }
-            break;
-        }
-        this.canvas.appendChild(element);
-        idea.implemented = true;
-        localStorage.setItem('godIdeas', JSON.stringify(godIdeas));
-      }
-    };
-    implementPastIdea();
-    if (Math.random() < 0.3) {
-      this.spawnCollectible(posX, posY);
-    }
-    if (Math.random() < 0.3) {
-      const newRecipe = {
-        inputs: [this.inventory.items[0]?.type || 'stardust', this.inventory.items[1]?.type || 'cosmicShard'],
-        output: {
-          type: (action.parameters.structure?.type || 'celestial') + 'Essence',
-          color: action.parameters.color || '#ffffff',
-          value: Math.floor(Math.random() * 50 + 25)
-        }
-      };
-      this.crafting.recipes.push(newRecipe);
-    }
-  }
-  handleAmbientAction(action) {
-    if (!action || !action.parameters) return;
-    const duration = action.parameters.duration || 3000;
-    const effects = ['spaceStorm', 'nebulaMist', 'solarWind', 'cosmicRain'];
-    const effect = effects[Math.floor(Math.random() * effects.length)];
-    document.body.style.animation = `${effect} ${duration}ms ease-in-out`;
-    if (action.parameters.pattern === 'particles') {
-      for (let i = 0; i < 30; i++) {
-        const particle = document.createElement('div');
-        particle.className = 'ambient-effect';
-        particle.style.width = '10px';
-        particle.style.height = '10px';
-        particle.style.background = action.parameters.color || '#fff';
-        particle.style.left = Math.random() * window.innerWidth + 'px';
-        particle.style.top = Math.random() * window.innerHeight + 'px';
-        particle.style.filter = `blur(${Math.random() * 5}px)`;
-        document.body.appendChild(particle);
-        const angle = Math.random() * Math.PI * 2;
-        const speed = Math.random() * 100 + 50;
-        particle.style.transform = `translate(
-              ${Math.cos(angle) * speed}px,
-              ${Math.sin(angle) * speed}px
-            )`;
-        setTimeout(() => particle.remove(), duration);
-      }
-    }
-    document.body.classList.add('ambient-active');
-    setTimeout(() => {
-      document.body.classList.remove('ambient-active');
-      document.body.style.animation = '';
-    }, duration);
-  }
-  startGameLoop() {
-    this.executeState();
-    setInterval(() => {
-      if (!this.cooldown) {
-        this.lastAutonomousMove = Date.now() + 5000;
-        this.cooldown = true;
-        this.executeState();
-        setTimeout(() => {
-          this.cooldown = false;
-        }, 180000);
-      }
-    }, 1000);
-    this.updateViewBox();
-    setInterval(() => {
-      if (Date.now() - this.lastChunkUpdate > 1000) {
-        this.updateVisibleChunks();
-        this.lastChunkUpdate = Date.now();
-      }
-    }, 1000);
-    requestAnimationFrame(() => this.gameLoop());
-  }
-  gameLoop() {
-    this.checkCollisions();
-    this.visualizeAudio();
-    requestAnimationFrame(() => this.gameLoop());
-  }
-  checkCollisions() {
-    const npcX = parseFloat(this.npc.getAttribute("cx"));
-    const npcY = parseFloat(this.npc.getAttribute("cy"));
-    const pickupDistance = 30;
-    this.collectibles.forEach(collectible => {
-      if (!collectible.collected) {
-        const dx = npcX - collectible.x;
-        const dy = npcY - collectible.y;
-        const distance = Math.hypot(dx, dy);
-        if (distance < pickupDistance) {
-          collectible.collected = true;
-          collectible.element.remove();
-          this.collectibles.splice(this.collectibles.indexOf(collectible), 1);
-          const baseItems = JSON.parse(localStorage.getItem('baseCollectibles'));
-          if (baseItems && baseItems.length) {
-            const randomItem = baseItems[Math.floor(Math.random() * baseItems.length)];
-            this.inventory.addItem(randomItem);
-            this.logAction(`Collected ${randomItem.type}`);
-            this.crafting.checkAndCraft();
-            this.npc.classList.remove('npc-collecting');
-          }
-        }
-      }
-    });
-  }
-  spawnCollectible(x, y) {
-    const collectible = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-    collectible.setAttribute("cx", x);
-    collectible.setAttribute("cy", y);
-    collectible.setAttribute("r", 8);
-    collectible.setAttribute("fill", "yellow");
-    collectible.classList.add('collectible');
-    this.canvas.appendChild(collectible);
-    this.collectibles.push({
-      element: collectible,
-      x: x,
-      y: y,
-      collected: false
-    });
-  }
-  animateNPCTo(targetX, targetY, duration) {
-    const startX = parseFloat(this.npc.getAttribute("cx"));
-    const startY = parseFloat(this.npc.getAttribute("cy"));
-    const deltaX = targetX - startX;
-    const deltaY = targetY - startY;
-    const startTime = performance.now();
-    const animate = currentTime => {
-      const elapsed = currentTime - startTime;
-      const progress = Math.min(elapsed / duration, 1);
-      const easeProgress = this.easeInOutCubic(progress);
-      const currentX = startX + deltaX * easeProgress;
-      const currentY = startY + deltaY * easeProgress;
-      this.npc.setAttribute("cx", currentX);
-      this.npc.setAttribute("cy", currentY);
-      if (progress < 1) {
-        requestAnimationFrame(animate);
-      }
-    };
-    requestAnimationFrame(animate);
-  }
-  easeInOutCubic(t) {
-    return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
-  }
-  startCountdown(seconds) {
-    if (!this.timerValue) return;
-    if (this.countdownInterval) {
-      clearInterval(this.countdownInterval);
-    }
-    const updateTimer = () => {
-      const minutes = Math.floor(seconds / 60);
-      const remainingSeconds = seconds % 60;
-      this.timerValue.textContent = `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
-    };
-    updateTimer();
-    this.countdownInterval = setInterval(() => {
-      seconds--;
-      updateTimer();
-      if (seconds <= 0) {
-        clearInterval(this.countdownInterval);
-        this.startCountdown(180);
-      }
-    }, 1000);
-  }
-  skipCooldown() {
-    if (this.cooldown) {
-      this.cooldown = false;
-      this.skipBtn.style.opacity = '0.5';
-      setTimeout(() => {
-        this.skipBtn.style.opacity = '1';
-      }, 1000);
-      this.startCountdown(180);
-    }
-  }
-  startAutonomousBehavior() {
-    this.autonomousInterval = setInterval(() => {
-      if (Date.now() - this.lastAutonomousMove > 2000 && !this.cooldown) {
-        if (this.collectibles.length > 0) {
-          this.moveToNearestCollectible();
-        } else {
-          this.autonomousMove();
-        }
-      }
-    }, 1000);
-  }
-  autonomousMove() {
-    if (this.collectibles.length > 0) {
-      this.moveToNearestCollectible();
-      return;
-    }
-    const movements = [{
-      fn: this.wander.bind(this),
-      weight: 1,
-      cooldown: 2000
-    }, {
-      fn: this.explore.bind(this),
-      weight: 1,
-      cooldown: 5000
-    }, {
-      fn: this.moveToNearestCollectible.bind(this),
-      weight: 5,
-      cooldown: 2000
-    }, {
-      fn: this.interactWithStructure.bind(this),
-      weight: 1,
-      cooldown: 6000
-    }, {
-      fn: this.seekCollectible.bind(this),
-      weight: 4,
-      cooldown: 3000
-    }, {
-      fn: this.orbitNearestStructure.bind(this),
-      weight: 1,
-      cooldown: 7000
-    }, {
-      fn: () => {
-        if (this.inventory.items.length >= 2 && Math.random() < 0.2) {
-          this.crafting.checkAndCraft();
-        }
-      },
-      weight: 1,
-      cooldown: 10000
-    }];
-    const totalWeight = movements.reduce((sum, m) => sum + m.weight, 0);
-    let random = Math.random() * totalWeight;
-    for (let movement of movements) {
-      random -= movement.weight;
-      if (random <= 0) {
-        movement.fn();
-        this.lastAutonomousMove = Date.now() + movement.cooldown;
-        break;
-      }
-    }
-  }
-  moveToNearestCollectible() {
-    if (this.collectibles.length === 0) return;
-    let nearest = null;
-    let minDist = Infinity;
-    const npcX = parseFloat(this.npc.getAttribute("cx"));
-    const npcY = parseFloat(this.npc.getAttribute("cy"));
-    this.collectibles.forEach(collectible => {
-      if (!collectible.collected) {
-        const dx = collectible.x - npcX;
-        const dy = collectible.y - npcY;
-        const distance = Math.hypot(dx, dy);
-        if (distance < minDist) {
-          minDist = distance;
-          nearest = collectible;
-        }
-      }
-    });
-    if (nearest) {
-      this.npc.classList.add('npc-collecting');
-      this.animateNPCTo(nearest.x, nearest.y, 2000);
-      setTimeout(() => {
-        if (nearest && !nearest.collected) {
-          nearest.collected = true;
-          nearest.element.remove();
-          this.collectibles.splice(this.collectibles.indexOf(nearest), 1);
-          const baseItems = JSON.parse(localStorage.getItem('baseCollectibles'));
-          if (baseItems && baseItems.length) {
-            const randomItem = baseItems[Math.floor(Math.random() * baseItems.length)];
-            this.inventory.addItem(randomItem);
-            this.logAction(`Collected ${randomItem.type}`);
-            this.crafting.checkAndCraft();
-          }
-        }
-        this.npc.classList.remove('npc-collecting');
-      }, 2100);
-    }
-  }
-  wander() {
-    const angle = Math.random() * Math.PI * 2;
-    const distance = Math.random() * 300 + 200;
-    const currentX = parseFloat(this.npc.getAttribute("cx"));
-    const currentY = parseFloat(this.npc.getAttribute("cy"));
-    const newX = currentX + Math.cos(angle) * distance;
-    const newY = currentY + Math.sin(angle) * distance;
-    this.animateNPCTo(newX, newY, 3000);
-  }
-  explore() {
-    if (this.structures.length === 0) {
-      this.wander();
-      return;
-    }
-    const target = this.structures[Math.floor(Math.random() * this.structures.length)];
-    if (target) {
-      const transform = target.getAttribute('transform');
-      const coords = transform.match(/translate\(([-+]?\d*\.?\d+),\s*([-+]?\d*\.?\d+)\)/);
-      if (coords) {
-        const newX = parseFloat(coords[1]);
-        const newY = parseFloat(coords[2]);
-        this.animateNPCTo(newX, newY, 3000);
-      } else {
-        this.wander();
-      }
-    } else {
-      this.wander();
-    }
-  }
-  interactWithStructure() {
-    const nearestStructure = this.findNearestStructure();
-    if (nearestStructure) {
-      const transform = nearestStructure.getAttribute('transform');
-      const coords = transform.match(/translate\(([-+]?\d*\.?\d+),\s*([-+]?\d*\.?\d+)\)/);
-      if (coords) {
-        const structureX = parseFloat(coords[1]);
-        const structureY = parseFloat(coords[2]);
-        const angle = Date.now() / 1000;
-        const radius = 50;
-        const newX = structureX + Math.cos(angle) * radius;
-        const newY = structureY + Math.sin(angle) * radius;
-        this.animateNPCTo(newX, newY, 2000);
-      }
-    }
-  }
-  findNearestStructure() {
-    if (!this.structures.length) return null;
-    let nearest = null;
-    let minDist = Infinity;
-    const npcX = parseFloat(this.npc.getAttribute("cx"));
-    const npcY = parseFloat(this.npc.getAttribute("cy"));
-    for (let structure of this.structures) {
-      const transform = structure.getAttribute('transform');
-      const coords = transform.match(/translate\(([-+]?\d*\.?\d+),\s*([-+]?\d*\.?\d+)\)/);
-      if (coords) {
-        const x = parseFloat(coords[1]);
-        const y = parseFloat(coords[2]);
-        const dist = Math.hypot(x - npcX, y - npcY);
-        if (dist < minDist) {
-          minDist = dist;
-          nearest = structure;
-        }
-      }
-    }
-    return nearest;
-  }
-  orbitNearestStructure() {
-    const structure = this.findNearestStructure();
-    if (structure) {
-      const transform = structure.getAttribute('transform');
-      const coords = transform.match(/translate\(([-+]?\d*\.?\d+),\s*([-+]?\d*\.?\d+)\)/);
-      if (coords) {
-        const centerX = parseFloat(coords[1]);
-        const centerY = parseFloat(coords[2]);
-        const time = Date.now() / 1000;
-        const radius = 100;
-        const newX = centerX + Math.cos(time) * radius;
-        const newY = centerY + Math.sin(time) * radius;
-        this.animateNPCTo(newX, newY, 3000);
-      }
-    }
-  }
-  investigateBrightStar() {
-    const rainbowStars = document.querySelectorAll('.star-rainbow');
-    if (rainbowStars.length > 0) {
-      const star = rainbowStars[Math.floor(Math.random() * rainbowStars.length)];
-      const cx = parseFloat(star.getAttribute("cx")) + parseFloat(this.canvas.getAttribute('viewBox').split(' ')[0]) + window.innerWidth / 2;
-      const cy = parseFloat(star.getAttribute("cy")) + parseFloat(this.canvas.getAttribute('viewBox').split(' ')[1]) + window.innerHeight / 2;
-      this.animateNPCTo(cx, cy, 3000);
-    }
-  }
-  seekCollectible() {
-    if (!this.collectibles.length) return;
-    const target = this.collectibles[0];
-    const cx = parseFloat(target.element.getAttribute("cx"));
-    const cy = parseFloat(target.element.getAttribute("cy"));
-    this.npc.classList.add('npc-collecting');
-    const trail = document.createElement('div');
-    trail.className = 'npc-trail';
-    trail.style.left = `${cx}px`;
-    trail.style.top = `${cy}px`;
-    document.body.appendChild(trail);
-    this.animateNPCTo(cx, cy, 2000);
-    setTimeout(() => {
-      this.npc.classList.remove('npc-collecting');
-      target.element.remove();
-      this.collectibles.shift();
-      trail.remove();
-      const baseItems = JSON.parse(localStorage.getItem('baseCollectibles'));
-      if (baseItems && baseItems.length) {
-        const randomItem = baseItems[Math.floor(Math.random() * baseItems.length)];
-        this.inventory.addItem(randomItem);
-        this.logAction(`Collected ${randomItem.type}`);
-        this.crafting.checkAndCraft();
-      }
-    }, 2500);
-  }
-  initAudio() {
-    this.audioContext = new AudioContext();
-    this.audioAnalyser = this.audioContext.createAnalyser();
-    const source = this.audioContext.createMediaElementSource(this.audio);
-    source.connect(this.audioAnalyser);
-    this.audioAnalyser.connect(this.audioContext.destination);
-    this.audioAnalyser.fftSize = 256;
-    this.audioData = new Uint8Array(this.audioAnalyser.frequencyBinCount);
-  }
-  visualizeAudio() {
-    const stars = this.canvas.querySelectorAll('.star');
-    this.audioAnalyser.getByteFrequencyData(this.audioData);
-    stars.forEach((star, i) => {
-      const audioIndex = i % this.audioData.length;
-      const audioValue = this.audioData[audioIndex] / 255;
-      if (audioValue > 0.8) {
-        star.style.animation = 'starAudioPulse 0.5s infinite';
-        if (Math.random() < 0.001) {
-          star.classList.add('star-rainbow');
-          setTimeout(() => {
-            const cx = parseFloat(star.getAttribute("cx"));
-            const cy = parseFloat(star.getAttribute("cy"));
-            this.spawnCollectible(cx, cy);
-            star.classList.remove('star-rainbow');
-          }, 2000);
-        }
-      } else {
-        star.style.animation = 'twinkle 3s infinite';
-      }
-    });
-    if (Math.random() < 0.001) {
-      const x = Math.random() * 10000 - 5000;
-      const y = Math.random() * 10000 - 5000;
-      this.spawnCollectible(x, y);
-    }
-  }
-  updateViewBox() {
-    const x = parseFloat(this.npc.getAttribute('cx'));
-    const y = parseFloat(this.npc.getAttribute('cy'));
-    const viewBoxWidth = window.innerWidth;
-    const viewBoxHeight = window.innerHeight;
-    this.canvas.setAttribute('viewBox', `${x - viewBoxWidth / 2} ${y - viewBoxHeight / 2} ${viewBoxWidth} ${viewBoxHeight}`);
-    requestAnimationFrame(() => this.updateViewBox());
-  }
-}
-class NPCInventory {
-  constructor() {
-    this.items = [];
-    this.maxSize = 10;
-    this.element = document.getElementById('inventory-items');
-    this.updateDisplay();
-  }
-  addItem(item) {
-    if (this.items.length < this.maxSize) {
-      this.items.push(item);
-      this.updateDisplay();
-      return true;
-    }
-    return false;
-  }
-  removeItem(index) {
-    if (index >= 0 && index < this.items.length) {
-      const removed = this.items.splice(index, 1)[0];
-      this.updateDisplay();
-      return removed;
-    }
-    return null;
-  }
-  updateDisplay() {
-    if (!this.element) return;
-    this.element.innerHTML = this.items.map((item, i) => `
-          <div class="npc-inventory-item">
-            <span style="color:${item.color}">${item.type}</span>
-            <span>${item.value}</span>
-          </div>
-        `).join('');
-  }
-  show() {
-    const inventoryDiv = document.getElementById('npc-inventory');
-    inventoryDiv.classList.remove('hidden');
-  }
-}
-class NPCCrafting {
-  constructor(inventory, game) {
-    this.inventory = inventory;
-    this.game = game;
-    this.recipes = [{
-      inputs: ['stardust', 'stardust'],
-      output: {
-        type: 'starEssence',
-        color: '#88ffff',
-        value: 25
-      }
-    }, {
-      inputs: ['cosmicShard', 'voidEssence'],
-      output: {
-        type: 'spaceTime',
-        color: '#ff88ff',
-        value: 75
-      }
-    }];
-    this.element = document.getElementById('npc-crafting');
-    this.craftBar = document.getElementById('craft-bar');
-    this.isCrafting = false;
-  }
-  checkAndCraft() {
-    if (this.isCrafting) return;
-    for (const recipe of this.recipes) {
-      if (this.canCraft(recipe)) {
-        this.startCrafting(recipe);
-        break;
-      }
-    }
-  }
-  canCraft(recipe) {
-    const itemCounts = {};
-    this.inventory.items.forEach(item => {
-      itemCounts[item.type] = (itemCounts[item.type] || 0) + 1;
-    });
-    return recipe.inputs.every(input => {
-      return (itemCounts[input] || 0) > 0;
-    });
-  }
-  startCrafting(recipe) {
-    this.isCrafting = true;
-    this.element.classList.add('active');
-    this.craftBar.style.width = '0%';
-    const craftDuration = 3000;
-    const startTime = performance.now();
-    const animate = currentTime => {
-      const elapsed = currentTime - startTime;
-      const progress = Math.min(elapsed / craftDuration, 1);
-      this.craftBar.style.width = `${progress * 100}%`;
-      if (progress < 1) {
-        requestAnimationFrame(animate);
-      } else {
-        this.finishCrafting(recipe);
-      }
-    };
-    requestAnimationFrame(animate);
-  }
-  finishCrafting(recipe) {
-    recipe.inputs.forEach(input => {
-      const index = this.inventory.items.findIndex(item => item.type === input);
-      if (index !== -1) {
-        this.inventory.removeItem(index);
-      }
-    });
-    this.inventory.addItem(recipe.output);
-    this.game.logAction(`Crafted ${recipe.output.type}`);
-    this.isCrafting = false;
-    this.element.classList.remove('active');
-    this.checkAndCraft();
-  }
-}
-const game = new Game();</script>
+  <script type="module" src="js/main.js"></script>
 <script defer src="https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516" integrity="sha512-8DS7rgIrAmghBFwoOTujcf6D9rXvH8xm8JQ1Ja01h9QX8EzXldiszufYa4IFfKdLUKTTrnSFXLDkUEOTrZQ8Qg==" data-cf-beacon='{"version":"2024.11.0","token":"4c6229722a6346bc8eb5cb0e5eae5d41","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
 </body>
 </html>
