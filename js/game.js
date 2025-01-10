@@ -16,6 +16,8 @@ export class Game {
     this.countdownInterval = null;
     this.currentState = null;
     this.cooldown = false;
+    this.isCrafting = false;
+    this.isMoving = false;
     this.started = false;
     this.actionHistory = [];
     this.autonomousInterval = null;
@@ -137,47 +139,6 @@ export class Game {
     }
   }
 
-  moveTowards(targetX, targetY, duration = 2000) {
-    if (!this.npc) return;
-    
-    this.targetPosition = { x: targetX, y: targetY };
-    
-    if (this.moveAnimation) {
-      cancelAnimationFrame(this.moveAnimation);
-    }
-    
-    const startX = parseFloat(this.npc.getAttribute("cx"));
-    const startY = parseFloat(this.npc.getAttribute("cy"));
-    const startTime = performance.now();
-    
-    // Reduced movement speed for smoother motion
-    this.moveSpeed = 0.3;
-    
-    const animate = (currentTime) => {
-      const elapsed = currentTime - startTime;
-      const progress = Math.min(elapsed / duration, 1);
-      
-      // Use easing for smoother movement
-      const easeProgress = 0.5 - Math.cos(progress * Math.PI) / 2;
-      
-      const currentX = startX + (this.targetPosition.x - startX) * easeProgress;
-      const currentY = startY + (this.targetPosition.y - startY) * easeProgress;
-      
-      this.npc.setAttribute("cx", currentX);
-      this.npc.setAttribute("cy", currentY);
-      this.updateCamera();
-      
-      if (progress < 1) {
-        this.moveAnimation = requestAnimationFrame(animate);
-      } else {
-        this.lastAutonomousMove = Date.now();
-        this.checkNextAction(); // Queue up next action
-      }
-    };
-    
-    this.moveAnimation = requestAnimationFrame(animate);
-  }
-
   findNearestCollectible() {
     if (!this.npc || this.collectibles.length === 0) return null;
     
@@ -187,48 +148,92 @@ export class Game {
     let nearest = null;
     let minDist = Infinity;
     
-    // Only consider uncollected items within visible range
-    const visibleRange = this.chunkSize * 2;
+    // Only consider uncollected items 
+    const activeCollectibles = this.collectibles.filter(c => !c.collected && !c.targetted);
     
-    this.collectibles.forEach(collectible => {
-      if (!collectible.collected) {
-        const dx = collectible.x - npcX;
-        const dy = collectible.y - npcY;
-        const distance = Math.hypot(dx, dy);
-        
-        // Only consider items within visible range
-        if (distance < visibleRange && distance < minDist) {
-          minDist = distance;
-          nearest = collectible;
-        }
+    if (activeCollectibles.length === 0) {
+      return null;
+    }
+
+    activeCollectibles.forEach(collectible => {
+      const dx = collectible.x - npcX;
+      const dy = collectible.y - npcY;
+      const distance = Math.hypot(dx, dy);
+      
+      // Consider items within reasonable range
+      if (distance < 1000 && distance < minDist) {
+        minDist = distance;
+        nearest = collectible;
       }
     });
+
+    if (nearest) {
+      nearest.targetted = true; // Mark as being targeted to prevent multiple NPCs targeting same item
+    }
     
     return nearest;
   }
 
   checkNextAction() {
-    // Don't queue new actions during cooldown
-    if (this.cooldown) return;
-    
-    const nearest = this.findNearestCollectible();
-    
-    if (nearest) {
-      // If there's a nearby collectible, move towards it
-      this.moveTowards(nearest.x, nearest.y);
-      return;
-    }
-    
-    // If no collectibles nearby, check if we should craft
-    if (this.inventory.items.length >= 2) {
+    if (this.cooldown || this.isCrafting) return;
+
+    // First priority: Check if we can craft
+    if (this.inventory && this.inventory.items.length >= 2) {
       this.crafting.checkAndCraft();
       return;
     }
+
+    // Second priority: Find nearest collectible
+    const nearest = this.findNearestCollectible();
+    if (nearest) {
+      this.moveTowardsCollectible(nearest);
+      return;
+    }
+
+    // Third priority: If no collectibles in range, explore new chunks
+    this.exploreNewChunks();
+  }
+
+  exploreNewChunks() {
+    if (!this.npc) return;
     
-    // If nothing else to do and we've been idle, wander
-    const idleTime = Date.now() - this.lastAutonomousMove;
-    if (idleTime > this.idleTimeout) {
-      this.wander();
+    const npcX = parseFloat(this.npc.getAttribute("cx"));
+    const npcY = parseFloat(this.npc.getAttribute("cy"));
+    
+    // Find direction with fewest explored chunks
+    const directions = [
+      {x: 1000, y: 0},
+      {x: -1000, y: 0},
+      {x: 0, y: 1000},
+      {x: 0, y: -1000}
+    ];
+    
+    let bestDirection = null;
+    let leastExplored = Infinity;
+    
+    directions.forEach(dir => {
+      const checkX = Math.floor((npcX + dir.x) / this.chunkSize);
+      const checkY = Math.floor((npcY + dir.y) / this.chunkSize);
+      
+      // Count explored chunks in this direction
+      let exploredCount = 0;
+      for (let i = -1; i <= 1; i++) {
+        for (let j = -1; j <= 1; j++) {
+          const key = `${checkX + i},${checkY + j}`;
+          if (this.chunks.has(key)) {
+            exploredCount++;
+          }
+        }
+      }
+      
+      if (exploredCount < leastExplored) {
+        leastExplored = exploredCount;
+        bestDirection = dir;
+      }
+    });
+    
+    if (bestDirection) {
+      this.moveTowards(npcX + bestDirection.x, npcY + bestDirection.y, 5000); // Slower movement
     }
   }
 
@@ -252,54 +257,65 @@ export class Game {
     }
   }
 
+  moveTowards(targetX, targetY, duration = 3000) {
+    if (!this.npc || this.isMoving) return;
+    
+    this.isMoving = true;
+    const startX = parseFloat(this.npc.getAttribute("cx"));
+    const startY = parseFloat(this.npc.getAttribute("cy"));
+    const startTime = performance.now();
+    
+    // Ensure we're not trying to move to our current position
+    if (Math.abs(targetX - startX) < 10 && Math.abs(targetY - startY) < 10) {
+      this.isMoving = false;
+      this.checkNextAction();
+      return;
+    }
+    
+    const animate = (currentTime) => {
+      const elapsed = currentTime - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      
+      // Use easing for smoother movement
+      const easeProgress = 0.5 - Math.cos(progress * Math.PI) / 2;
+      
+      const currentX = startX + (targetX - startX) * easeProgress;
+      const currentY = startY + (targetY - startY) * easeProgress;
+      
+      this.npc.setAttribute("cx", currentX);
+      this.npc.setAttribute("cy", currentY);
+      this.updateCamera();
+      
+      if (progress < 1) {
+        this.moveAnimation = requestAnimationFrame(animate);
+      } else {
+        this.isMoving = false;
+        this.moveAnimation = null;
+        this.checkNextAction(); // Queue up next action immediately
+      }
+    };
+    
+    this.moveAnimation = requestAnimationFrame(animate);
+  }
+
+  moveTowardsCollectible(collectible) {
+    if (!collectible || collectible.collected) return;
+    
+    const duration = 2000; // Faster movement towards collectibles
+    this.npc.classList.add('npc-collecting');
+    this.moveTowards(collectible.x, collectible.y, duration);
+  }
+
   autonomousMove() {
-    if (!this.npc) return;
+    if (!this.npc || this.isMoving || this.cooldown) return;
     
     const now = Date.now();
     const timeSinceLastMove = now - this.lastAutonomousMove;
 
-    // If we're not already moving somewhere
-    if (!this.moveAnimation) {
-      // First priority: Check for nearby collectibles
-      const nearest = this.findNearestCollectible();
-      if (nearest && !nearest.collected) {
-        this.moveTowards(nearest.x, nearest.y);
-        this.npc.classList.add('npc-collecting');
-        this.lastAutonomousMove = now;
-        return;
-      } else {
-        this.npc.classList.remove('npc-collecting');
-      }
-
-      // If idle for too long, start wandering
-      if (timeSinceLastMove > this.idleTimeout) {
-        this.wander();
-        return;
-      }
-
-      // Occasionally wander even when not idle
-      if (Math.random() < 0.05) {
-        this.wander();
-      }
+    if (timeSinceLastMove > this.idleTimeout) {
+      this.checkNextAction();
+      this.lastAutonomousMove = now;
     }
-  }
-
-  wander() {
-    if (!this.npc) return;
-    
-    const currentX = parseFloat(this.npc.getAttribute("cx"));
-    const currentY = parseFloat(this.npc.getAttribute("cy"));
-    
-    // Create a more natural wandering pattern
-    const angle = Math.random() * Math.PI * 2;
-    const distance = Math.random() * 200 + 100; // Reduced wander distance
-    
-    const targetX = currentX + Math.cos(angle) * distance;
-    const targetY = currentY + Math.sin(angle) * distance;
-    
-    // Move with a longer duration for smoother movement
-    this.moveTowards(targetX, targetY, 3000);
-    this.lastAutonomousMove = Date.now();
   }
 
   spawnCollectible(x, y) {
@@ -318,7 +334,8 @@ export class Game {
       y: y,
       collected: false,
       type: 'stardust',
-      value: Math.floor(Math.random() * 20) + 10
+      value: Math.floor(Math.random() * 20) + 10,
+      targetted: false
     });
   }
 
