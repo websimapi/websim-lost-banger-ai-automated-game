@@ -32,6 +32,11 @@ export class Game {
     this.structures = [];
     this.spawnedStructures = [];
     this.npc = null;
+    this.lastAutonomousMove = Date.now();
+    this.idleTimeout = 15000; 
+    this.lastChunkUpdateX = null;
+    this.lastChunkUpdateY = null;
+    this.moveAnimation = null;
     if (!localStorage.getItem('baseCollectibles')) {
       localStorage.setItem('baseCollectibles', JSON.stringify([{
         type: 'stardust',
@@ -61,7 +66,10 @@ export class Game {
     this.actionLog?.classList.add('hidden');
     this.countdownTimer?.classList.add('hidden');
     this.initialize();
-    this.startAutonomousBehavior();
+    requestAnimationFrame(() => {
+      this.updateCamera();
+      this.startAutonomousBehavior();
+    });
   }
 
   createNPC() {
@@ -85,8 +93,13 @@ export class Game {
   initialize() {
     if (!this.npc) {
       this.npc = this.createNPC();
+      this.npc.setAttribute("cx", "0");
+      this.npc.setAttribute("cy", "0");
     }
     this.updateVisibleChunks();
+    this.updateCamera(); 
+    this.lastAutonomousMove = Date.now();
+    this.autonomousMove();
   }
 
   updateVisibleChunks() {
@@ -125,7 +138,13 @@ export class Game {
   }
 
   moveTowards(targetX, targetY, duration = 2000) {
+    if (!this.npc) return;
+    
     this.targetPosition = { x: targetX, y: targetY };
+    
+    if (this.moveAnimation) {
+      cancelAnimationFrame(this.moveAnimation);
+    }
     
     const animate = () => {
       if (!this.npc) return;
@@ -144,11 +163,13 @@ export class Game {
         this.npc.setAttribute("cx", newX);
         this.npc.setAttribute("cy", newY);
         this.updateCamera();
-        requestAnimationFrame(animate);
+        this.moveAnimation = requestAnimationFrame(animate);
+      } else {
+        this.lastAutonomousMove = Date.now();
       }
     };
     
-    animate();
+    this.moveAnimation = requestAnimationFrame(animate);
   }
 
   updateCamera() {
@@ -160,8 +181,15 @@ export class Game {
     const viewBoxWidth = this.viewportWidth;
     const viewBoxHeight = this.viewportHeight;
     
-    this.canvas.setAttribute('viewBox', 
-      `${x - viewBoxWidth/2} ${y - viewBoxHeight/2} ${viewBoxWidth} ${viewBoxHeight}`);
+    const viewBox = `${x - viewBoxWidth/2} ${y - viewBoxHeight/2} ${viewBoxWidth} ${viewBoxHeight}`;
+    this.canvas.setAttribute('viewBox', viewBox);
+
+    if (Math.abs(x - (this.lastChunkUpdateX || 0)) > 200 || 
+        Math.abs(y - (this.lastChunkUpdateY || 0))) {
+      this.updateVisibleChunks();
+      this.lastChunkUpdateX = x;
+      this.lastChunkUpdateY = y;
+    }
   }
 
   findNearestCollectible() {
@@ -508,25 +536,50 @@ interface Response {
   autonomousMove() {
     if (!this.npc) return;
     
+    const now = Date.now();
+    const timeSinceLastMove = now - this.lastAutonomousMove;
+
+    if (timeSinceLastMove > this.idleTimeout) {
+      this.wander();
+      return;
+    }
+
     const nearest = this.findNearestCollectible();
     if (nearest && !nearest.collected) {
       this.moveTowards(nearest.x, nearest.y);
+      this.lastAutonomousMove = now;
       return;
     }
+
+    if (Math.random() < 0.3 || timeSinceLastMove > 5000) {
+      this.wander();
+      return;
+    }
+  }
+
+  wander() {
+    if (!this.npc) return;
     
     const currentX = parseFloat(this.npc.getAttribute("cx"));
     const currentY = parseFloat(this.npc.getAttribute("cy"));
+    
     const angle = Math.random() * Math.PI * 2;
     const distance = Math.random() * 300 + 200;
+    
     const targetX = currentX + Math.cos(angle) * distance;
     const targetY = currentY + Math.sin(angle) * distance;
     
     this.moveTowards(targetX, targetY);
+    this.lastAutonomousMove = Date.now();
   }
 
   startAutonomousBehavior() {
+    if (this.autonomousInterval) {
+      clearInterval(this.autonomousInterval);
+    }
+
     this.autonomousInterval = setInterval(() => {
-      if (Date.now() - this.lastAutonomousMove > 2000 && !this.cooldown) {
+      if (!this.cooldown) {
         this.autonomousMove();
       }
     }, 1000);
